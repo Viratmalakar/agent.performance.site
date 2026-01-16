@@ -6,7 +6,6 @@ import pandas as pd
 app = Flask(__name__)
 app.secret_key = "agent_secret_key"
 
-# ---------------- LOGIN ----------------
 @app.route("/", methods=["GET","POST"])
 def login():
     if request.method=="POST":
@@ -18,20 +17,17 @@ def login():
         return render_template("login.html", error="Invalid Username or Password")
     return render_template("login.html")
 
-# ---------------- DASHBOARD ----------------
 @app.route("/dashboard")
 def dashboard():
     if "user" not in session:
         return redirect("/")
     return render_template("index.html")
 
-# ---------------- LOGOUT ----------------
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect("/")
 
-# ---------------- CHANGE PASSWORD ----------------
 @app.route("/change_password")
 def change_password():
     if session.get("user")!="admin":
@@ -49,14 +45,12 @@ def update_password():
     USERS["admin"] = new
     return render_template("login.html", success="Password changed successfully")
 
-# ---------------- UPLOAD PAGE ----------------
 @app.route("/upload")
 def upload():
     if "user" not in session:
         return redirect("/")
     return render_template("upload.html")
 
-# ---------------- PROCESS FILES ----------------
 @app.route("/process", methods=["POST"])
 def process():
 
@@ -70,29 +64,33 @@ def process():
     for f in files:
         name = f.filename.lower()
 
-        if "login" in name:
+        if "login" in name or "logout" in name:
             login_df = pd.read_excel(f)
         elif "cdr" in name:
             cdr_df = pd.read_excel(f)
         elif "agent" in name:
             agent_df = pd.read_excel(f)
-        elif "crm" in name:
+        elif "detail" in name or "crm" in name:
             crm_df = pd.read_excel(f)
 
     if any(df is None for df in [login_df, cdr_df, agent_df, crm_df]):
-        return "Please upload all 4 correct Excel files (login, cdr, agent, crm)"
+        return "System could not identify all files. Please upload correct reports."
 
-    # ---------- TEMP TEST OUTPUT ----------
+    # test output
     result_df = pd.DataFrame({
-        "Status": ["Login file OK","CDR file OK","Agent file OK","CRM file OK"]
+        "File Detection": [
+            "Login Report OK",
+            "CDR Report OK",
+            "Agent Performance OK",
+            "CRM Report OK"
+        ]
     })
 
-    output_file = "Test_Output.xlsx"
+    output_file = "File_Detection_Success.xlsx"
     result_df.to_excel(output_file, index=False)
 
     return send_file(output_file, as_attachment=True)
 
-# ---------------- RUN SERVER ----------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
