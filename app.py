@@ -1,23 +1,160 @@
+from flask import Flask, request, redirect, session, send_file
 import pandas as pd
+import os
 
+app = Flask(__name__)
+app.secret_key = "agent_secret_key"
+
+USERS = {"admin": "12345"}
+
+THEME = """
+<style>
+body{
+margin:0;
+font-family:Arial;
+background: linear-gradient(135deg,#7f5cff,#ff9acb,#6ec6ff);
+background-size:400% 400%;
+animation:bg 12s infinite;
+}
+@keyframes bg{
+0%{background-position:0% 50%}
+50%{background-position:100% 50%}
+100%{background-position:0% 50%}
+}
+.box{
+width:360px;
+margin:120px auto;
+background:rgba(255,255,255,0.9);
+padding:25px;
+border-radius:15px;
+box-shadow:0 0 20px rgba(0,0,0,0.3);
+text-align:center;
+}
+input,button{
+width:90%;
+padding:10px;
+margin:8px;
+border-radius:6px;
+border:1px solid #ccc;
+}
+button{
+background:#ffb84d;
+font-weight:bold;
+cursor:pointer;
+}
+ul{list-style:none;padding:0;}
+li{font-weight:bold;}
+a{text-decoration:none;font-weight:bold;}
+table{
+width:100%;
+border-collapse:collapse;
+font-size:13px;
+}
+th,td{
+border:1px solid #aaa;
+padding:6px;
+text-align:left;
+}
+th{
+background:#ffd27f;
+}
+</style>
+"""
+
+# ---------- LOGIN ----------
+@app.route("/", methods=["GET","POST"])
+def login():
+    if request.method=="POST":
+        u=request.form["username"]
+        p=request.form["password"]
+        if u in USERS and USERS[u]==p:
+            session["user"]=u
+            return redirect("/upload")
+        return THEME + "<div class='box'>❌ Invalid Login</div>"
+
+    return THEME + """
+    <div class='box'>
+    <h2>Login</h2>
+    <form method='post'>
+    <input name='username' placeholder='Username'>
+    <input type='password' name='password' placeholder='Password'>
+    <button>Login</button>
+    </form>
+    </div>
+    """
+
+# ---------- UPLOAD ----------
+@app.route("/upload")
+def upload():
+    if "user" not in session:
+        return redirect("/")
+
+    return THEME + """
+    <div class='box'>
+    <h2>Upload Excel Files</h2>
+    <form action='/process' method='post' enctype='multipart/form-data'>
+    <input type='file' name='files' multiple onchange='showFiles(this)'><br>
+    <ul id='fileList'></ul>
+    <button>Process Files</button>
+    </form>
+    <br><a href='/logout'>Logout</a>
+    </div>
+
+    <script>
+    function showFiles(input){
+        let list=document.getElementById("fileList");
+        list.innerHTML="";
+        for(let i=0;i<input.files.length;i++){
+            let li=document.createElement("li");
+            li.innerHTML=input.files[i].name+" ✔";
+            list.appendChild(li);
+        }
+    }
+    </script>
+    """
+
+# ---------- PROCESS ----------
 @app.route("/process", methods=["POST"])
 def process():
-    files = request.files.getlist("files")
+    files=request.files.getlist("files")
 
-    df = pd.read_excel(files[0])   # first file preview
+    dfs=[]
 
-    table = df.head(10).to_html(index=False)
+    for f in files:
+        df=pd.read_excel(f)
+        df["Source_File"]=f.filename
+        dfs.append(df)
 
-    html = THEME + """
-    <div class='box' style='width:80%'>
-    <h2>Excel Preview (First 10 Rows)</h2>
-    """ + table + """
-    <br>
-    <a href='/download'>⬇ Download Excel</a><br><br>
+    final_df=pd.concat(dfs,ignore_index=True)
+
+    final_df.to_excel("Final_Report.xlsx",index=False)
+
+    table=final_df.head(15).to_html(index=False)
+
+    html=THEME+f"""
+    <div class='box' style='width:85%'>
+    <h2>Combined Excel Preview</h2>
+    {table}
+    <br><br>
+    <a href='/download'>⬇ Download Final Excel</a><br><br>
     <a href='/upload'>Upload More</a>
     </div>
     """
 
-    df.to_excel("Final_Output.xlsx", index=False)
-
     return html
+
+# ---------- DOWNLOAD ----------
+@app.route("/download")
+def download():
+    return send_file("Final_Report.xlsx",as_attachment=True)
+
+# ---------- LOGOUT ----------
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/")
+
+# ---------- RUN ----------
+if __name__=="__main__":
+    port=int(os.environ.get("PORT",5000))
+    app.run(host="0.0.0.0",port=port)
