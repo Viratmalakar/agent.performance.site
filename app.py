@@ -1,12 +1,19 @@
 from flask import Flask, render_template, request, redirect, session, send_file
 from users import USERS
-import os
 import pandas as pd
+import os
 
 app = Flask(__name__)
 app.secret_key = "agent_secret_key"
 
 FINAL_DF = None
+
+def score_cols(cols, keywords):
+    score = 0
+    for k in keywords:
+        if k in cols:
+            score += 1
+    return score
 
 def find_col(df, keys):
     for c in df.columns:
@@ -53,24 +60,41 @@ def process():
     global FINAL_DF
 
     files = request.files.getlist("files")
+    dfs = []
+
+    for f in files:
+        dfs.append(pd.read_excel(f))
 
     login_df = cdr_df = agent_df = crm_df = None
 
-    for f in files:
-        df = pd.read_excel(f)
+    for df in dfs:
         cols = " ".join(df.columns.astype(str)).lower()
 
-        if any(x in cols for x in ["login","logout","break"]):
-            login_df = df
-        elif any(x in cols for x in ["disposition","campaign","cdr"]):
-            cdr_df = df
-        elif any(x in cols for x in ["talk","agent name","aht"]):
-            agent_df = df
-        elif any(x in cols for x in ["createdby","tag","detail","crm"]):
-            crm_df = df
+        login_score = score_cols(cols, ["login","logout","break","lunch","tea"])
+        cdr_score   = score_cols(cols, ["disposition","campaign","cdr"])
+        agent_score = score_cols(cols, ["talk","agent","aht"])
+        crm_score   = score_cols(cols, ["createdby","tag","crm","detail"])
+
+        scores = {
+            "login": login_score,
+            "cdr": cdr_score,
+            "agent": agent_score,
+            "crm": crm_score
+        }
+
+        best = max(scores, key=scores.get)
+
+        if best=="login" and login_df is None:
+            login_df=df
+        elif best=="cdr" and cdr_df is None:
+            cdr_df=df
+        elif best=="agent" and agent_df is None:
+            agent_df=df
+        elif best=="crm" and crm_df is None:
+            crm_df=df
 
     if not all([login_df is not None, cdr_df is not None, agent_df is not None, crm_df is not None]):
-        return "❌ System could not identify all reports. Please upload correct files."
+        return "❌ System still could not map all reports. Please share screenshot of Excel columns."
 
     emp_col = find_col(login_df,["user","agent","emp"])
     login_col = find_col(login_df,["login"])
