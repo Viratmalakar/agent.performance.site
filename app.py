@@ -3,13 +3,8 @@ import os
 
 app = Flask(__name__)
 app.secret_key = "agent_secret_key"
-app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB limit
 
-# Create uploads directory if not exists
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-
-USERS = {"admin": "12345"}
+USERS = {"admin":"12345"}
 
 THEME = """
 <style>
@@ -63,14 +58,9 @@ margin-top:4px;
 height:8px;
 width:0%;
 background:#2196f3;
-transition: width 0.3s ease;
 }
 .success{
 color:green;
-font-weight:bold;
-}
-.error{
-color:red;
 font-weight:bold;
 }
 </style>
@@ -107,9 +97,11 @@ def upload():
     return THEME + """
     <div class='box'>
     <h2>Upload Excel Files</h2>
-    <input type='file' id='files' multiple accept='.xlsx,.xls'><br>
+
+    <input type='file' id='files' multiple><br>
     <div id='list'></div>
     <button onclick='uploadFiles()'>Upload Files</button>
+
     <br><br><a href='/logout'>Logout</a>
     </div>
 
@@ -120,13 +112,10 @@ function formatKB(size){
 
 function uploadFiles(){
     let files=document.getElementById("files").files;
-    if(files.length === 0) return alert('Please select files');
-
     let list=document.getElementById("list");
     list.innerHTML="";
 
     let formData=new FormData();
-    let totalUploaded = 0;
 
     for(let i=0;i<files.length;i++){
         let f=files[i];
@@ -136,9 +125,9 @@ function uploadFiles(){
         div.className="file-item";
         div.id="file"+i;
 
-        div.innerHTML=`${f.name} (${formatKB(f.size)})<br>
-        <div class='progress'><div class='bar' id='bar${i}'></div></div>
-        <span id='text${i}'>Waiting...</span>`;
+        div.innerHTML=f.name+" ("+formatKB(f.size)+")"+
+        "<div class='progress'><div class='bar' id='bar"+i+"'></div></div>"+
+        "<span id='text"+i+"'></span>";
 
         list.appendChild(div);
     }
@@ -148,43 +137,25 @@ function uploadFiles(){
 
     xhr.upload.onprogress=function(e){
         if(e.lengthComputable){
-            let percent=Math.round((e.loaded/e.total)*100);
-            // Show overall progress on all bars
+            let percent=(e.loaded/e.total)*100;
             for(let i=0;i<files.length;i++){
-                document.getElementById(`bar${i}`).style.width=percent+"%";
-                document.getElementById(`text${i}`).innerHTML=`${formatKB(e.loaded)} / ${formatKB(e.total)} (${percent}%)`;
+                document.getElementById("bar"+i).style.width=percent+"%";
+                document.getElementById("text"+i).innerHTML=
+                formatKB(e.loaded)+" / "+formatKB(e.total);
             }
         }
     };
 
     xhr.onload=function(){
-        try{
-            let response = JSON.parse(xhr.responseText);
-            if(xhr.status==200 && response.status==="success"){
-                for(let i=0;i<files.length;i++){
-                    document.getElementById(`text${i}`).innerHTML="<span class='success'>Uploaded ✔</span>";
-                }
-            } else {
-                showError("Upload failed: " + (response.message || "Unknown error"));
+        if(xhr.status==200){
+            for(let i=0;i<files.length;i++){
+                document.getElementById("text"+i).innerHTML=
+                "<span class='success'>Uploaded ✔</span>";
             }
-        } catch(e){
-            showError("Response error: " + xhr.responseText);
         }
     };
 
-    xhr.onerror = function(){
-        showError("Network error during upload");
-    };
-
     xhr.send(formData);
-}
-
-function showError(msg){
-    let list=document.getElementById("list");
-    let div=document.createElement("div");
-    div.className="file-item";
-    div.innerHTML=`<span class='error'>${msg}</span>`;
-    list.appendChild(div);
 }
 </script>
     """
@@ -192,23 +163,8 @@ function showError(msg){
 # ---------- PROCESS ----------
 @app.route("/process", methods=["POST"])
 def process():
-    if "user" not in session:
-        return jsonify({"status": "error", "message": "Unauthorized"}), 401
-
-    try:
-        files=request.files.getlist("files")
-        uploaded_files = []
-        
-        for f in files:
-            if f.filename == "":  # Empty file skipped
-                continue
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], f.filename)
-            f.save(filepath)
-            uploaded_files.append(f.filename)
-        
-        return jsonify({"status": "success", "files": uploaded_files})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+    files=request.files.getlist("files")
+    return jsonify({"status":"success","files":[f.filename for f in files]})
 
 # ---------- LOGOUT ----------
 @app.route("/logout")
@@ -219,4 +175,4 @@ def logout():
 # ---------- RUN ----------
 if __name__=="__main__":
     port=int(os.environ.get("PORT",5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0",port=port)
