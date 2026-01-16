@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Upload Excel</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="box">
+<h2>Upload Reports</h2>
+
+<form action="/process" method="post" enctype="multipart/form-data">
+
+<input type="file" name="login_report" required><br><br>
+<input type="file" name="cdr_report" required><br><br>
+<input type="file" name="agent_report" required><br><br>
+<input type="file" name="crm_report" required><br><br>
+
+<button type="submit">Generate Final Excel</button>
+
+</form>
+
+<br>
+<a href="/dashboard">⬅ Back</a>
+
+</div>
+
+</body>
+</html>
