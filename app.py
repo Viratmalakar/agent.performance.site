@@ -1,11 +1,10 @@
-from flask import Flask, request, redirect, session, send_file
-import pandas as pd
+from flask import Flask, request, redirect, session, jsonify
 import os
 
 app = Flask(__name__)
 app.secret_key = "agent_secret_key"
 
-USERS = {"admin": "12345"}
+USERS = {"admin":"12345"}
 
 THEME = """
 <style>
@@ -22,7 +21,7 @@ animation:bg 12s infinite;
 100%{background-position:0% 50%}
 }
 .box{
-width:360px;
+width:420px;
 margin:120px auto;
 background:rgba(255,255,255,0.9);
 padding:25px;
@@ -42,21 +41,27 @@ background:#ffb84d;
 font-weight:bold;
 cursor:pointer;
 }
-ul{list-style:none;padding:0;}
-li{font-weight:bold;}
-a{text-decoration:none;font-weight:bold;}
-table{
-width:100%;
-border-collapse:collapse;
+.file-item{
+margin:10px 0;
 font-size:13px;
-}
-th,td{
-border:1px solid #aaa;
-padding:6px;
 text-align:left;
 }
-th{
-background:#ffd27f;
+.progress{
+width:100%;
+background:#ddd;
+border-radius:5px;
+overflow:hidden;
+height:8px;
+margin-top:4px;
+}
+.bar{
+height:8px;
+width:0%;
+background:#2196f3;
+}
+.success{
+color:green;
+font-weight:bold;
 }
 </style>
 """
@@ -92,61 +97,74 @@ def upload():
     return THEME + """
     <div class='box'>
     <h2>Upload Excel Files</h2>
-    <form action='/process' method='post' enctype='multipart/form-data'>
-    <input type='file' name='files' multiple onchange='showFiles(this)'><br>
-    <ul id='fileList'></ul>
-    <button>Process Files</button>
-    </form>
-    <br><a href='/logout'>Logout</a>
+
+    <input type='file' id='files' multiple><br>
+    <div id='list'></div>
+    <button onclick='uploadFiles()'>Upload Files</button>
+
+    <br><br><a href='/logout'>Logout</a>
     </div>
 
-    <script>
-    function showFiles(input){
-        let list=document.getElementById("fileList");
-        list.innerHTML="";
-        for(let i=0;i<input.files.length;i++){
-            let li=document.createElement("li");
-            li.innerHTML=input.files[i].name+" ✔";
-            list.appendChild(li);
-        }
+<script>
+function formatKB(size){
+    return (size/1024).toFixed(1)+" KB";
+}
+
+function uploadFiles(){
+    let files=document.getElementById("files").files;
+    let list=document.getElementById("list");
+    list.innerHTML="";
+
+    let formData=new FormData();
+
+    for(let i=0;i<files.length;i++){
+        let f=files[i];
+        formData.append("files",f);
+
+        let div=document.createElement("div");
+        div.className="file-item";
+        div.id="file"+i;
+
+        div.innerHTML=f.name+" ("+formatKB(f.size)+")"+
+        "<div class='progress'><div class='bar' id='bar"+i+"'></div></div>"+
+        "<span id='text"+i+"'></span>";
+
+        list.appendChild(div);
     }
-    </script>
+
+    let xhr=new XMLHttpRequest();
+    xhr.open("POST","/process",true);
+
+    xhr.upload.onprogress=function(e){
+        if(e.lengthComputable){
+            let percent=(e.loaded/e.total)*100;
+            for(let i=0;i<files.length;i++){
+                document.getElementById("bar"+i).style.width=percent+"%";
+                document.getElementById("text"+i).innerHTML=
+                formatKB(e.loaded)+" / "+formatKB(e.total);
+            }
+        }
+    };
+
+    xhr.onload=function(){
+        if(xhr.status==200){
+            for(let i=0;i<files.length;i++){
+                document.getElementById("text"+i).innerHTML=
+                "<span class='success'>Uploaded ✔</span>";
+            }
+        }
+    };
+
+    xhr.send(formData);
+}
+</script>
     """
 
 # ---------- PROCESS ----------
 @app.route("/process", methods=["POST"])
 def process():
     files=request.files.getlist("files")
-
-    dfs=[]
-
-    for f in files:
-        df=pd.read_excel(f)
-        df["Source_File"]=f.filename
-        dfs.append(df)
-
-    final_df=pd.concat(dfs,ignore_index=True)
-
-    final_df.to_excel("Final_Report.xlsx",index=False)
-
-    table=final_df.head(15).to_html(index=False)
-
-    html=THEME+f"""
-    <div class='box' style='width:85%'>
-    <h2>Combined Excel Preview</h2>
-    {table}
-    <br><br>
-    <a href='/download'>⬇ Download Final Excel</a><br><br>
-    <a href='/upload'>Upload More</a>
-    </div>
-    """
-
-    return html
-
-# ---------- DOWNLOAD ----------
-@app.route("/download")
-def download():
-    return send_file("Final_Report.xlsx",as_attachment=True)
+    return jsonify({"status":"success","files":[f.filename for f in files]})
 
 # ---------- LOGOUT ----------
 @app.route("/logout")
