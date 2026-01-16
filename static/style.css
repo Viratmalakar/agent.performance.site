@@ -1,6 +1,6 @@
 body {
 margin:0;
-font-family: Arial, sans-serif;
+font-family: Arial;
 background: linear-gradient(135deg,#7f5cff,#ff9acb,#6ec6ff);
 background-size: 400% 400%;
 animation: gradientMove 12s ease infinite;
@@ -13,7 +13,6 @@ overflow:hidden;
 100%{background-position:0% 50%}
 }
 
-/* particles */
 body::before {
 content:"";
 position:fixed;
@@ -37,8 +36,8 @@ padding:25px;
 border-radius:15px;
 box-shadow:0 0 25px rgba(0,0,0,0.2);
 text-align:center;
-z-index:2;
 position:relative;
+z-index:2;
 }
 
 input {
@@ -52,17 +51,12 @@ button {
 padding:10px;
 width:100%;
 background:#ffb84d;
-color:black;
 border:none;
 border-radius:6px;
 font-weight:bold;
 cursor:pointer;
 }
-button:hover {
-background:#ffa500;
-}
 
-/* top right menu */
 .topmenu {
 position:fixed;
 top:20px;
