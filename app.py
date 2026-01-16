@@ -6,12 +6,12 @@ import pandas as pd
 app = Flask(__name__)
 app.secret_key = "agent_secret_key"
 
-# ---------------- HELPERS ----------------
+FINAL_DF = None   # global storage
+
 def find_col(df, keywords):
     for c in df.columns:
-        name = c.lower()
         for k in keywords:
-            if k in name:
+            if k in c.lower():
                 return c
     return None
 
@@ -24,22 +24,19 @@ def time_to_sec(t):
 def sec_to_time(s):
     return str(pd.to_timedelta(int(s), unit="s"))
 
-# ---------------- LOGIN ----------------
 @app.route("/", methods=["GET","POST"])
 def login():
     if request.method=="POST":
-        u = request.form["username"]
-        p = request.form["password"]
-        if u in USERS and USERS[u] == p:
-            session["user"] = u
+        u=request.form["username"]
+        p=request.form["password"]
+        if u in USERS and USERS[u]==p:
+            session["user"]=u
             return redirect("/dashboard")
-        return render_template("login.html", error="Invalid Username or Password")
+        return render_template("login.html", error="Invalid login")
     return render_template("login.html")
 
 @app.route("/dashboard")
 def dashboard():
-    if "user" not in session:
-        return redirect("/")
     return render_template("index.html")
 
 @app.route("/logout")
@@ -47,26 +44,13 @@ def logout():
     session.clear()
     return redirect("/")
 
-@app.route("/change_password")
-def change_password():
-    return render_template("change_password.html")
-
-@app.route("/update_password", methods=["POST"])
-def update_password():
-    old = request.form["old_password"]
-    new = request.form["new_password"]
-    if USERS["admin"] != old:
-        return render_template("change_password.html", error="Old password wrong")
-    USERS["admin"] = new
-    return render_template("login.html", success="Password changed successfully")
-
 @app.route("/upload")
 def upload():
     return render_template("upload.html")
 
-# ---------------- PROCESS ----------------
 @app.route("/process", methods=["POST"])
 def process():
+    global FINAL_DF
 
     files = request.files.getlist("files")
 
@@ -76,21 +60,20 @@ def process():
         df = pd.read_excel(f)
         cols = " ".join(df.columns.astype(str)).lower()
 
-        if "login" in cols or "logout" in cols:
+        if "login" in cols:
             login_df = df
-        elif "disposition" in cols or "campaign" in cols:
+        elif "disposition" in cols:
             cdr_df = df
-        elif "talk" in cols or "agent" in cols:
+        elif "talk" in cols:
             agent_df = df
-        elif "createdby" in cols or "crm" in cols or "detail" in cols:
+        elif "createdby" in cols:
             crm_df = df
 
     if any(x is None for x in [login_df,cdr_df,agent_df,crm_df]):
-        return "One or more reports could not be identified."
+        return "Files not detected properly"
 
-    # -------- COLUMN MAPPING --------
     emp_col = find_col(login_df,["user","agent","emp"])
-    login_time_col = find_col(login_df,["login"])
+    login_col = find_col(login_df,["login"])
     lunch_col = find_col(login_df,["lunch"])
     short_col = find_col(login_df,["short"])
     tea_col = find_col(login_df,["tea"])
@@ -102,12 +85,11 @@ def process():
 
     disp_col = find_col(cdr_df,["disposition"])
     camp_col = find_col(cdr_df,["campaign"])
-    cdr_agent_col = find_col(cdr_df,["user","agent"])
+    cdr_agent_col = find_col(cdr_df,["agent","user"])
 
     crm_agent_col = find_col(crm_df,["createdby"])
 
-    # -------- LOGIN CALC --------
-    login_df["TotalLoginSec"] = login_df[login_time_col].apply(time_to_sec)
+    login_df["LoginSec"] = login_df[login_col].apply(time_to_sec)
     login_df["BreakSec"] = (
         login_df[lunch_col].apply(time_to_sec) +
         login_df[short_col].apply(time_to_sec) +
@@ -120,21 +102,17 @@ def process():
 
     login_sum = login_df.groupby(emp_col).sum().reset_index()
 
-    # -------- TALK TIME --------
     agent_df["TalkSec"] = agent_df[talk_col].apply(time_to_sec)
     talk_sum = agent_df.groupby(agent_name_col)["TalkSec"].sum().reset_index()
 
-    # -------- CDR --------
     mature = cdr_df[cdr_df[disp_col].str.contains("mature|transfer",case=False,na=False)]
     total_mature = mature.groupby(cdr_agent_col).size().reset_index(name="TotalMature")
 
     inbound = mature[mature[camp_col].str.contains("inbound",case=False,na=False)]
     ib_mature = inbound.groupby(cdr_agent_col).size().reset_index(name="IBMature")
 
-    # -------- CRM --------
     crm_count = crm_df.groupby(crm_agent_col).size().reset_index(name="TotalTagging")
 
-    # -------- MERGE --------
     final = login_sum.merge(talk_sum,left_on=emp_col,right_on=agent_name_col,how="left")
     final = final.merge(total_mature,left_on=emp_col,right_on=cdr_agent_col,how="left")
     final = final.merge(ib_mature,left_on=emp_col,right_on=cdr_agent_col,how="left")
@@ -142,31 +120,32 @@ def process():
 
     final.fillna(0,inplace=True)
 
-    final["TotalLogin"] = final["TotalLoginSec"].apply(sec_to_time)
-    final["TotalBreak"] = final["BreakSec"].apply(sec_to_time)
-    final["TotalMeeting"] = final["MeetingSec"].apply(sec_to_time)
-    final["TotalTalkTime"] = final["TalkSec"].apply(sec_to_time)
+    final["Total Login"] = final["LoginSec"].apply(sec_to_time)
+    final["Total Break"] = final["BreakSec"].apply(sec_to_time)
+    final["Total Meeting"] = final["MeetingSec"].apply(sec_to_time)
+    final["Total Talk Time"] = final["TalkSec"].apply(sec_to_time)
+    final["OB Mature"] = final["TotalMature"] - final["IBMature"]
+    final["AHT"] = (final["TalkSec"]/final["TotalMature"]).fillna(0).round(2)
 
-    final["OBMature"] = final["TotalMature"] - final["IBMature"]
-    final["AHT"] = (final["TalkSec"] / final["TotalMature"]).fillna(0).round(2)
+    FINAL_DF = final[[emp_col,
+        "Total Login","Total Break","Total Meeting",
+        "Total Talk Time","TotalMature","IBMature",
+        "OB Mature","TotalTagging","AHT"]]
 
-    # -------- FINAL FORMAT --------
-    output = final[[emp_col,
-        "TotalLogin","TotalBreak","TotalMeeting","TotalTalkTime",
-        "TotalMature","IBMature","OBMature","TotalTagging","AHT"]]
-
-    output.columns = [
+    FINAL_DF.columns = [
         "EMP ID","Total Login","Total Break","Total Meeting",
-        "Total Talk Time","Total Mature","IB Mature","OB Mature",
-        "Total Tagging","AHT"
+        "Total Talk Time","Total Mature","IB Mature",
+        "OB Mature","Total Tagging","AHT"
     ]
 
-    file_name = "Final_Agent_Performance.xlsx"
-    output.to_excel(file_name,index=False)
+    return render_template("result.html",
+        tables=[FINAL_DF.to_html(classes="table",index=False)])
 
-    return send_file(file_name,as_attachment=True)
+@app.route("/download")
+def download():
+    FINAL_DF.to_excel("Final_Agent_Performance.xlsx",index=False)
+    return send_file("Final_Agent_Performance.xlsx",as_attachment=True)
 
-# ---------------- RUN ----------------
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+if __name__=="__main__":
+    port=int(os.environ.get("PORT",5000))
+    app.run(host="0.0.0.0",port=port)
