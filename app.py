@@ -62,31 +62,31 @@ def process():
     crm_df = None
 
     for f in files:
-        name = f.filename.lower()
+        df = pd.read_excel(f)
+        cols = " ".join(df.columns.astype(str)).lower()
 
-        if "login" in name or "logout" in name:
-            login_df = pd.read_excel(f)
-        elif "cdr" in name:
-            cdr_df = pd.read_excel(f)
-        elif "agent" in name:
-            agent_df = pd.read_excel(f)
-        elif "detail" in name or "crm" in name:
-            crm_df = pd.read_excel(f)
+        if "login" in cols or "logout" in cols:
+            login_df = df
+        elif "disposition" in cols or "campaign" in cols:
+            cdr_df = df
+        elif "talk" in cols or "agent" in cols:
+            agent_df = df
+        elif "createdby" in cols or "crm" in cols:
+            crm_df = df
 
     if any(df is None for df in [login_df, cdr_df, agent_df, crm_df]):
-        return "System could not identify all files. Please upload correct reports."
+        return "System could not identify all files by column names."
 
-    # test output
     result_df = pd.DataFrame({
-        "File Detection": [
-            "Login Report OK",
-            "CDR Report OK",
-            "Agent Performance OK",
-            "CRM Report OK"
+        "Detection": [
+            "Login Report Detected",
+            "CDR Report Detected",
+            "Agent Performance Detected",
+            "CRM Report Detected"
         ]
     })
 
-    output_file = "File_Detection_Success.xlsx"
+    output_file = "Column_Detection_Success.xlsx"
     result_df.to_excel(output_file, index=False)
 
     return send_file(output_file, as_attachment=True)
