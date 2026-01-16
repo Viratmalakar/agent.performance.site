@@ -6,11 +6,11 @@ import pandas as pd
 app = Flask(__name__)
 app.secret_key = "agent_secret_key"
 
-FINAL_DF = None   # global storage
+FINAL_DF = None
 
-def find_col(df, keywords):
+def find_col(df, keys):
     for c in df.columns:
-        for k in keywords:
+        for k in keys:
             if k in c.lower():
                 return c
     return None
@@ -60,17 +60,17 @@ def process():
         df = pd.read_excel(f)
         cols = " ".join(df.columns.astype(str)).lower()
 
-        if "login" in cols:
+        if any(x in cols for x in ["login","logout","break"]):
             login_df = df
-        elif "disposition" in cols:
+        elif any(x in cols for x in ["disposition","campaign","cdr"]):
             cdr_df = df
-        elif "talk" in cols:
+        elif any(x in cols for x in ["talk","agent name","aht"]):
             agent_df = df
-        elif "createdby" in cols:
+        elif any(x in cols for x in ["createdby","tag","detail","crm"]):
             crm_df = df
 
-    if any(x is None for x in [login_df,cdr_df,agent_df,crm_df]):
-        return "Files not detected properly"
+    if not all([login_df is not None, cdr_df is not None, agent_df is not None, crm_df is not None]):
+        return "❌ System could not identify all reports. Please upload correct files."
 
     emp_col = find_col(login_df,["user","agent","emp"])
     login_col = find_col(login_df,["login"])
@@ -106,12 +106,12 @@ def process():
     talk_sum = agent_df.groupby(agent_name_col)["TalkSec"].sum().reset_index()
 
     mature = cdr_df[cdr_df[disp_col].str.contains("mature|transfer",case=False,na=False)]
-    total_mature = mature.groupby(cdr_agent_col).size().reset_index(name="TotalMature")
+    total_mature = mature.groupby(cdr_agent_col).size().reset_index(name="Total Mature")
 
     inbound = mature[mature[camp_col].str.contains("inbound",case=False,na=False)]
-    ib_mature = inbound.groupby(cdr_agent_col).size().reset_index(name="IBMature")
+    ib_mature = inbound.groupby(cdr_agent_col).size().reset_index(name="IB Mature")
 
-    crm_count = crm_df.groupby(crm_agent_col).size().reset_index(name="TotalTagging")
+    crm_count = crm_df.groupby(crm_agent_col).size().reset_index(name="Total Tagging")
 
     final = login_sum.merge(talk_sum,left_on=emp_col,right_on=agent_name_col,how="left")
     final = final.merge(total_mature,left_on=emp_col,right_on=cdr_agent_col,how="left")
@@ -124,13 +124,13 @@ def process():
     final["Total Break"] = final["BreakSec"].apply(sec_to_time)
     final["Total Meeting"] = final["MeetingSec"].apply(sec_to_time)
     final["Total Talk Time"] = final["TalkSec"].apply(sec_to_time)
-    final["OB Mature"] = final["TotalMature"] - final["IBMature"]
-    final["AHT"] = (final["TalkSec"]/final["TotalMature"]).fillna(0).round(2)
+    final["OB Mature"] = final["Total Mature"] - final["IB Mature"]
+    final["AHT"] = (final["TalkSec"]/final["Total Mature"]).fillna(0).round(2)
 
     FINAL_DF = final[[emp_col,
         "Total Login","Total Break","Total Meeting",
-        "Total Talk Time","TotalMature","IBMature",
-        "OB Mature","TotalTagging","AHT"]]
+        "Total Talk Time","Total Mature","IB Mature",
+        "OB Mature","Total Tagging","AHT"]]
 
     FINAL_DF.columns = [
         "EMP ID","Total Login","Total Break","Total Meeting",
