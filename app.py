@@ -5,28 +5,29 @@ app = Flask(__name__)
 app.secret_key = "agent_secret_key"
 
 USERS = {
-    "admin":"12345"
+    "admin": "12345"
 }
 
 @app.route("/", methods=["GET","POST"])
 def login():
-    if request.method=="POST":
-        u=request.form["username"]
-        p=request.form["password"]
-        if u in USERS and USERS[u]==p:
-            session["user"]=u
+    if request.method == "POST":
+        u = request.form["username"]
+        p = request.form["password"]
+        if u in USERS and USERS[u] == p:
+            session["user"] = u
             return redirect("/upload")
         return "Invalid login"
+
     return '''
     <h2>Login</h2>
     <form method="post">
-    <input name="username" placeholder="Username"><br><br>
-    <input type="password" name="password" placeholder="Password"><br><br>
-    <button>Login</button>
+        <input name="username" placeholder="Username"><br><br>
+        <input type="password" name="password" placeholder="Password"><br><br>
+        <button type="submit">Login</button>
     </form>
     '''
 
-@app.route("/upload")
+@app.route("/upload", methods=["GET"])
 def upload():
     if "user" not in session:
         return redirect("/")
@@ -36,7 +37,7 @@ def upload():
     <form action="/process" method="post" enctype="multipart/form-data">
         <input type="file" name="files" multiple onchange="showFiles(this)"><br><br>
         <ul id="fileList"></ul>
-        <button>Submit</button>
+        <button type="submit">Submit</button>
     </form>
 
     <br><a href="/logout">Logout</a>
@@ -64,6 +65,6 @@ def logout():
     session.clear()
     return redirect("/")
 
-if __name__=="__main__":
-    port=int(os.environ.get("PORT",5000))
-    app.run(host="0.0.0.0",port=port)
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
