@@ -25,7 +25,9 @@ def process():
 
         for f in files:
             name = f.filename.lower()
-            df = pd.read_excel(f)
+
+            # IMPORTANT: header is on 3rd row
+            df = pd.read_excel(f, header=2)
 
             if "login" in name:
                 login = df
@@ -37,14 +39,15 @@ def process():
                 crm = df
 
         if any(x is None for x in [login, cdr, agent, crm]):
-            return "❌ Could not detect all 4 reports."
+            return "❌ All 4 reports not detected properly."
 
-        # Test only column existence
         return f"""
-        Login columns: {list(login.columns)}<br><br>
-        CDR columns: {list(cdr.columns)}<br><br>
-        Agent columns: {list(agent.columns)}<br><br>
-        CRM columns: {list(crm.columns)}
+        ✅ Files Loaded Successfully<br><br>
+
+        <b>Login Columns:</b><br>{list(login.columns)}<br><br>
+        <b>CDR Columns:</b><br>{list(cdr.columns)}<br><br>
+        <b>Agent Columns:</b><br>{list(agent.columns)}<br><br>
+        <b>CRM Columns:</b><br>{list(crm.columns)}
         """
 
     except Exception as e:
