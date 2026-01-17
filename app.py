@@ -24,7 +24,7 @@ def process():
 
     files = request.files.getlist("files")
     if len(files) != 3:
-        return "Upload exactly 3 files"
+        return "Upload exactly 3 files only"
 
     temp = tempfile.mkdtemp()
     paths = []
@@ -38,10 +38,17 @@ def process():
     cdr   = clean(pd.read_excel(paths[1], header=1))
     crm   = clean(pd.read_excel(paths[2]))
 
+    # 🔥 DEBUG COLUMN PRINT
+    print("AGENT COLUMNS:", agent.columns.tolist())
+    print("CDR COLUMNS:", cdr.columns.tolist())
+    print("CRM COLUMNS:", crm.columns.tolist())
+
     # ---- COLUMN DETECT ----
-    agent_col = find(agent, ["agent","name","emp"])
-    cdr_col   = find(cdr, ["user","login","agent"])
-    crm_col   = find(crm, ["created","emp","user"])
+    agent_col = find(agent, ["agent","name","emp","id"])
+    cdr_col   = find(cdr, ["user","login","agent","username"])
+    crm_col   = find(crm, ["created","emp","user","id"])
+
+    print("FOUND ->", agent_col, cdr_col, crm_col)
 
     if not agent_col or not crm_col:
         return f"Column missing. Agent:{agent_col}, CRM:{crm_col}"
@@ -65,7 +72,7 @@ def process():
     agent["totallogin"] = agent.get(login,0).fillna(0)
 
     # ---- MEETING ----
-    meet = find(agent,["meeting"])
+    meet = find(agent,["meeting","system"])
     agent["totalmeeting"] = agent.get(meet,0).fillna(0)
 
     # ---- TAGGING ----
