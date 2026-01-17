@@ -24,7 +24,7 @@ def process():
 
     files = request.files.getlist("files")
     if len(files) != 3:
-        return "Upload exactly 3 files only"
+        return "Upload exactly 3 files in order: Agent, CDR, CRM"
 
     temp = tempfile.mkdtemp()
     paths = []
@@ -34,27 +34,25 @@ def process():
         f.save(p)
         paths.append(p)
 
-    agent = clean(pd.read_excel(paths[0]))
-    cdr   = clean(pd.read_excel(paths[1], header=1))
-    crm   = clean(pd.read_excel(paths[2]))
+    # ---- READ FILES CORRECT ----
+    agent = clean(pd.read_excel(paths[0], header=2))   # Agent Performance
+    cdr   = clean(pd.read_excel(paths[1], header=1))   # CDR
+    crm   = clean(pd.read_excel(paths[2], header=2))   # CRM
 
-    # 🔥 DEBUG COLUMN PRINT
-    print("AGENT COLUMNS:", agent.columns.tolist())
-    print("CDR COLUMNS:", cdr.columns.tolist())
-    print("CRM COLUMNS:", crm.columns.tolist())
+    print("AGENT:", agent.columns.tolist())
+    print("CDR:", cdr.columns.tolist())
+    print("CRM:", crm.columns.tolist())
 
-    # ---- COLUMN DETECT ----
-    agent_col = find(agent, ["agent","name","emp","id"])
-    cdr_col   = find(cdr, ["user","login","agent","username"])
-    crm_col   = find(crm, ["created","emp","user","id"])
+    # ---- COLUMN MAP ----
+    agent_id = find(agent, ["agent","name","emp","id"])
+    crm_id   = find(crm, ["createdbyid","created","emp","id"])
+    cdr_id   = find(cdr, ["username","user"])
 
-    print("FOUND ->", agent_col, cdr_col, crm_col)
+    if not agent_id or not crm_id:
+        return f"Column missing. Agent:{agent_id}, CRM:{crm_id}"
 
-    if not agent_col or not crm_col:
-        return f"Column missing. Agent:{agent_col}, CRM:{crm_col}"
-
-    agent["empid"] = agent[agent_col].astype(str)
-    crm["empid"]   = crm[crm_col].astype(str)
+    agent["empid"] = agent[agent_id].astype(str)
+    crm["empid"]   = crm[crm_id].astype(str)
 
     # ---- BREAK ----
     lunch = find(agent,["lunch"])
@@ -78,16 +76,16 @@ def process():
     # ---- TAGGING ----
     tagging = crm.groupby("empid").size()
 
-    # ---- FINAL ----
+    # ---- FINAL REPORT ----
     final = pd.DataFrame()
     final["EMP ID"] = agent["empid"]
-    final["Agent Name"] = agent[agent_col]
+    final["Agent Name"] = agent[agent_id]
     final["Total Login"] = agent["totallogin"]
     final["Total Break"] = agent["totalbreak"]
     final["Total Meeting"] = agent["totalmeeting"]
     final["Total Tagging"] = final["EMP ID"].map(tagging).fillna(0).astype(int)
 
-    # ---- EXPORT SAFE ----
+    # ---- EXPORT ----
     out = os.path.join(temp,"Agent_Report.xlsx")
     with pd.ExcelWriter(out, engine="xlsxwriter") as writer:
         final.to_excel(writer,index=False,sheet_name="Report")
