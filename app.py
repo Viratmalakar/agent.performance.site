@@ -1,7 +1,6 @@
 from flask import Flask, request, send_file, render_template_string
 import pandas as pd
 import os
-from datetime import datetime
 
 app = Flask(__name__)
 
@@ -13,21 +12,22 @@ HTML = """
 <head>
 <title>Agent Performance</title>
 <style>
-body{font-family:Arial;background:linear-gradient(135deg,#ff9acb,#a9b9ff);padding:40px;}
-.box{background:white;padding:30px;border-radius:15px;max-width:1200px;margin:auto;}
+body{font-family:Arial;background:#f2f2f2;padding:30px;}
+.box{background:white;padding:25px;border-radius:12px;max-width:1200px;margin:auto;}
 table{border-collapse:collapse;width:100%;}
-th,td{border:1px solid #ccc;padding:8px;text-align:center;}
-th{background:#ffd27d;}
-button{padding:10px 20px;background:#2196f3;color:white;border:none;border-radius:6px;cursor:pointer;}
+th,td{border:1px solid #ccc;padding:6px;text-align:center;font-size:13px;}
+th{background:#ffe082;}
+button{padding:8px 16px;background:#2196f3;color:white;border:none;border-radius:5px;cursor:pointer;}
 </style>
 </head>
 <body>
 <div class="box">
-<h2>Upload Reports</h2>
+<h2>Upload 4 Excel Reports</h2>
 <form method="post" action="/process" enctype="multipart/form-data">
 <input type="file" name="files" multiple required><br><br>
 <button>Process</button>
 </form>
+<br>
 {{table}}
 {{download}}
 </div>
@@ -41,6 +41,7 @@ def home():
 
 @app.route("/process", methods=["POST"])
 def process():
+
     files = request.files.getlist("files")
     paths = []
 
@@ -49,63 +50,72 @@ def process():
         f.save(path)
         paths.append(path)
 
+    # Load files
     login = pd.read_excel(paths[0], header=2)
     cdr = pd.read_excel(paths[1], header=1)
     agent = pd.read_excel(paths[2], header=2)
     crm = pd.read_excel(paths[3])
 
-    # -------- LOGIN --------
-# Auto detect date column
-date_col = None
-for c in login.columns:
-    if "date" in c.lower() or "time" in c.lower():
-        date_col = c
-        break
+    # ---------------- LOGIN ----------------
+    # Auto detect date column
+    date_col = None
+    for c in login.columns:
+        if "date" in c.lower() or "time" in c.lower():
+            date_col = c
+            break
 
-if not date_col:
-    return "Date column not found in Login report"
+    if not date_col:
+        return "Date column not found in Login report"
 
-login[date_col] = pd.to_datetime(login[date_col], errors="coerce")
-first_login = login.groupby("UserName")[date_col].min().dt.time
+    login[date_col] = pd.to_datetime(login[date_col], errors="coerce")
+    first_login = login.groupby("UserName")[date_col].min().dt.time
 
-
-    # -------- AGENT --------
+    # ---------------- AGENT PERFORMANCE ----------------
     agent["Total Break"] = agent["LUNCHBREAK"] + agent["SHORTBREAK"] + agent["TEABREAK"]
     agent["Total Meeting"] = agent["MEETING"] + agent["SYSTEMDOWN"]
     agent["Total Net Login"] = agent["Total Login Time"] - agent["Total Break"]
 
-    # -------- CDR --------
-    cdr["Mature"] = cdr["Disposition"].isin(["CALLMATURED","TRANSFER"])
+    # ---------------- CDR ----------------
+    cdr["Mature"] = cdr["Disposition"].isin(["CALLMATURED", "TRANSFER"])
+
     total_mature = cdr.groupby("Username")["Mature"].sum()
+    transfer_call = cdr[cdr["Disposition"]=="TRANSFER"].groupby("Username").size()
+    ib_mature = cdr[
+        (cdr["Disposition"].isin(["CALLMATURED","TRANSFER"])) &
+        (cdr["Campaign"]=="CSRINBOUND")
+    ].groupby("Username").size()
 
-    transfer = cdr[cdr["Disposition"]=="TRANSFER"].groupby("Username").size()
-    ib = cdr[(cdr["Disposition"].isin(["CALLMATURED","TRANSFER"])) & (cdr["Campaign"]=="CSRINBOUND")].groupby("Username").size()
+    # ---------------- CRM ----------------
+    total_tagging = crm.groupby("CreatedByID").size()
 
-    # -------- CRM --------
-    tagging = crm.groupby("CreatedByID").size()
+    # ---------------- FINAL MERGE ----------------
+    result = pd.DataFrame()
 
-    # -------- MERGE --------
-    result = agent.copy()
-    result["Employee ID"] = result["Agent Name"]
+    result["Employee ID"] = agent["Agent Name"]
+    result["Agent Name"] = agent["Agent Name"]
     result["First Login Time"] = result["Employee ID"].map(first_login)
-    result["Total Mature"] = result["Employee ID"].map(total_mature).fillna(0)
-    result["Transfer Call"] = result["Employee ID"].map(transfer).fillna(0)
-    result["IB Mature"] = result["Employee ID"].map(ib).fillna(0)
-    result["OB Mature"] = result["Total Mature"] - result["IB Mature"]
-    result["Total Tagging"] = result["Employee ID"].map(tagging).fillna(0)
 
+    result["Total Login"] = agent["Total Login Time"]
+    result["Total Net Login"] = agent["Total Net Login"]
+    result["Total Break"] = agent["Total Break"]
+    result["Total Meeting"] = agent["Total Meeting"]
+    result["Total Talk Time"] = agent["Total Talk Time"]
+
+    result["Total Mature"] = result["Employee ID"].map(total_mature).fillna(0)
+    result["IB Mature"] = result["Employee ID"].map(ib_mature).fillna(0)
+    result["Transfer Call"] = result["Employee ID"].map(transfer_call).fillna(0)
+    result["OB Mature"] = result["Total Mature"] - result["IB Mature"]
+
+    result["Total Tagging"] = result["Employee ID"].map(total_tagging).fillna(0)
+
+    # AHT
     result["AHT"] = result["Total Talk Time"] / result["Total Mature"].replace(0,1)
 
-    final = result[[
-        "Employee ID","Agent Name","First Login Time",
-        "Total Login Time","Total Net Login","Total Break","Total Meeting",
-        "Total Talk Time","AHT","Total Mature","IB Mature",
-        "Transfer Call","OB Mature","Total Tagging"
-    ]]
+    # Save Excel
+    output_file = "Final_Report.xlsx"
+    result.to_excel(output_file, index=False)
 
-    final.to_excel("output.xlsx", index=False)
-
-    table_html = final.to_html(index=False)
+    table_html = result.to_html(index=False)
 
     return render_template_string(
         HTML,
@@ -115,8 +125,7 @@ first_login = login.groupby("UserName")[date_col].min().dt.time
 
 @app.route("/download")
 def download():
-    return send_file("output.xlsx", as_attachment=True)
+    return send_file("Final_Report.xlsx", as_attachment=True)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
-
