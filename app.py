@@ -4,32 +4,27 @@ import os, tempfile
 
 app = Flask(__name__)
 
-# ---------------- CLEAN COLUMNS ----------------
-def clean_cols(df):
+def clean(df):
     df.columns = df.columns.astype(str).str.strip().str.lower()
     return df
 
-# ---------------- AUTO FIND COLUMN ----------------
-def find_col(df, keywords):
+def find(df, keys):
     for c in df.columns:
-        col = str(c).lower()
-        for k in keywords:
-            if k in col:
+        for k in keys:
+            if k in c:
                 return c
     return None
 
-# ---------------- HOME ----------------
 @app.route("/")
-def index():
+def home():
     return render_template("index.html")
 
-# ---------------- PROCESS ----------------
 @app.route("/process", methods=["POST"])
 def process():
 
     files = request.files.getlist("files")
     if len(files) != 3:
-        return "Please upload exactly 3 Excel files"
+        return "Upload exactly 3 files"
 
     temp = tempfile.mkdtemp()
     paths = []
@@ -39,76 +34,58 @@ def process():
         f.save(p)
         paths.append(p)
 
-    # -------- READ FILES --------
-    agent = pd.read_excel(paths[0])
-    cdr = pd.read_excel(paths[1], header=1)
-    crm = pd.read_excel(paths[2])
+    agent = clean(pd.read_excel(paths[0]))
+    cdr   = clean(pd.read_excel(paths[1], header=1))
+    crm   = clean(pd.read_excel(paths[2]))
 
-    agent = clean_cols(agent)
-    cdr = clean_cols(cdr)
-    crm = clean_cols(crm)
+    # ---- COLUMN DETECT ----
+    agent_col = find(agent, ["agent","name","emp"])
+    cdr_col   = find(cdr, ["user","login","agent"])
+    crm_col   = find(crm, ["created","emp","user"])
 
-    # -------- AUTO DETECT EMP ID --------
-    agent_name_col = find_col(agent, ["agent", "name", "employee", "emp"])
-    cdr_user_col = find_col(cdr, ["user", "login", "agent"])
-    crm_emp_col = find_col(crm, ["created", "emp", "agent", "user"])
+    if not agent_col or not crm_col:
+        return f"Column missing. Agent:{agent_col}, CRM:{crm_col}"
 
-    if agent_name_col is None:
-        agent_name_col = agent.columns[0]
+    agent["empid"] = agent[agent_col].astype(str)
+    crm["empid"]   = crm[crm_col].astype(str)
 
-    if crm_emp_col is None:
-        crm_emp_col = crm.columns[0]
+    # ---- BREAK ----
+    lunch = find(agent,["lunch"])
+    short = find(agent,["short"])
+    tea   = find(agent,["tea"])
 
-    agent["empid"] = agent[agent_name_col]
-    cdr["empid"] = cdr[cdr_user_col]
-    crm["empid"] = crm[crm_emp_col]
+    agent["totalbreak"] = (
+        agent.get(lunch,0).fillna(0) +
+        agent.get(short,0).fillna(0) +
+        agent.get(tea,0).fillna(0)
+    )
 
-    # -------- BREAK --------
-    lunch = find_col(agent, ["lunch"])
-    short = find_col(agent, ["short"])
-    tea = find_col(agent, ["tea"])
+    # ---- LOGIN ----
+    login = find(agent,["login"])
+    agent["totallogin"] = agent.get(login,0).fillna(0)
 
-    agent["totalbreak"] = agent.get(lunch,0)+agent.get(short,0)+agent.get(tea,0)
+    # ---- MEETING ----
+    meet = find(agent,["meeting"])
+    agent["totalmeeting"] = agent.get(meet,0).fillna(0)
 
-    # -------- MEETING --------
-    meet = find_col(agent, ["meeting"])
-    agent["totalmeeting"] = agent.get(meet,0)
-
-    # -------- LOGIN --------
-    login = find_col(agent, ["login"])
-    agent["totallogin"] = agent.get(login,0)
-
-    # -------- TAGGING --------
+    # ---- TAGGING ----
     tagging = crm.groupby("empid").size()
 
-    # -------- FINAL --------
-    final = agent.copy()
-    final["Total Tagging"] = final["empid"].map(tagging).fillna(0)
+    # ---- FINAL ----
+    final = pd.DataFrame()
+    final["EMP ID"] = agent["empid"]
+    final["Agent Name"] = agent[agent_col]
+    final["Total Login"] = agent["totallogin"]
+    final["Total Break"] = agent["totalbreak"]
+    final["Total Meeting"] = agent["totalmeeting"]
+    final["Total Tagging"] = final["EMP ID"].map(tagging).fillna(0).astype(int)
 
-    final = final.rename(columns={
-        "empid":"EMP ID",
-        agent_name_col:"Agent Name",
-        "totallogin":"Total Login",
-        "totalbreak":"Total Break",
-        "totalmeeting":"Total Meeting"
-    })
-
-    show = [
-        "EMP ID",
-        "Agent Name",
-        "Total Login",
-        "Total Break",
-        "Total Meeting",
-        "Total Tagging"
-    ]
-
-    final = final[show]
-
+    # ---- EXPORT SAFE ----
     out = os.path.join(temp,"Agent_Report.xlsx")
-    final.to_excel(out,index=False)
+    with pd.ExcelWriter(out, engine="xlsxwriter") as writer:
+        final.to_excel(writer,index=False,sheet_name="Report")
 
     return send_file(out, as_attachment=True)
 
-# ---------------- RUN ----------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
