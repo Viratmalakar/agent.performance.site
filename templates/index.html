@@ -1,22 +1,4 @@
-<!DOCTYPE html>
-<html>
-<head>
-<title>Dashboard</title>
-<link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
-
-<div class="topmenu">
-<a href="/change_password">🔑 Change Password</a>
-<a href="/logout">🚪 Logout</a>
-</div>
-
-<div class="box">
-<h2>Welcome Chandan Sir</h2>
-<p>You are logged in as Admin</p>
-<hr>
-<a href="/upload">📂 Upload Excel Files</a>
-</div>
-
-</body>
-</html>
+<form action="/process" method="post" enctype="multipart/form-data">
+<input type="file" name="files" multiple required>
+<button type="submit">Process</button>
+</form>
