@@ -11,8 +11,9 @@ def clean_cols(df):
 
 def find_col(df, keywords):
     for c in df.columns:
+        col = str(c).lower()
         for k in keywords:
-            if k in c:
+            if k in col:
                 return c
     return None
 
@@ -107,3 +108,4 @@ def process():
 # ---------------- RUN ----------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
+
