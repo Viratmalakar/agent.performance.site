@@ -1,25 +1,6 @@
-<!DOCTYPE html>
-<html>
-<head>
-<title>Upload Excel</title>
-<link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
-
-<div class="topmenu">
-<a href="/dashboard">⬅ Back</a>
-<a href="/logout">🚪 Logout</a>
-</div>
-
-<div class="box">
-<h2>Upload All Excel Reports</h2>
-
-<form action="/process" method="post" enctype="multipart/form-data">
-<input type="file" name="files" multiple required><br><br>
-<button>Generate Final Excel</button>
+<h2>Upload 4 Reports</h2>
+<form method="post" action="/process" enctype="multipart/form-data">
+<input type="file" name="files" multiple required>
+<br><br>
+<button>Process</button>
 </form>
-
-</div>
-
-</body>
-</html>
