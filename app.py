@@ -30,58 +30,27 @@ table{width:100%;border-collapse:collapse;font-size:13px}
 th,td{border:1px solid #999;padding:6px}
 th{background:#ffd27f}
 .btn{padding:10px 20px;background:#2196f3;color:white;border-radius:6px;border:none;cursor:pointer}
-.progress{width:100%;background:#ddd;height:10px;border-radius:5px;overflow:hidden;margin-top:10px}
-.bar{height:10px;width:0%;background:#2196f3}
-#overlay{
-display:none;position:fixed;top:0;left:0;width:100%;height:100%;
-background:rgba(0,0,0,0.6);color:white;font-size:22px;
-align-items:center;justify-content:center;z-index:999;
-}
 </style>
 """
+
+LAST_HTML = ""
 
 @app.route("/")
 def home():
     return THEME + """
 <div class='box'>
 <h2>Upload 4 Excel Reports</h2>
-<input type="file" id="files" multiple><br><br>
-<div id="list"></div>
-<button class='btn' onclick="upload()">Upload & Calculate</button>
-<div class="progress"><div id="bar" class="bar"></div></div>
+<form action="/process" method="post" enctype="multipart/form-data">
+<input type="file" name="files" multiple required><br><br>
+<button class='btn'>Upload & Calculate</button>
+</form>
 </div>
-
-<div id="overlay">Processing... Please wait</div>
-
-<script>
-function upload(){
- let f=document.getElementById("files").files;
- if(f.length==0){alert("Select files");return;}
- let fd=new FormData();
- for(let i=0;i<f.length;i++) fd.append("files",f[i]);
-
- document.getElementById("overlay").style.display="flex";
-
- let xhr=new XMLHttpRequest();
- xhr.open("POST","/process",true);
-
- xhr.upload.onprogress=function(e){
-   if(e.lengthComputable){
-     let p=(e.loaded/e.total)*100;
-     document.getElementById("bar").style.width=p+"%";
-   }
- }
-
- xhr.onload=function(){
-   window.location="/result";
- }
- xhr.send(fd);
-}
-</script>
 """
 
 @app.route("/process", methods=["POST"])
 def process():
+    global LAST_HTML
+
     files=request.files.getlist("files")
 
     login=cdr=agent=crm=None
@@ -94,7 +63,9 @@ def process():
         elif "agent" in n: agent=df
         elif "crm" in n: crm=df
 
-    # ---- LOGIN ----
+    if any(x is None for x in [login,cdr,agent,crm]):
+        return "All 4 reports not detected"
+
     login["Duration"]=pd.to_timedelta(login["Duration"],errors="coerce").dt.total_seconds()
     total_login=login.groupby("UserName")["Duration"].sum()
 
@@ -106,11 +77,9 @@ def process():
 
     net_login=total_login-total_break
 
-    # ---- AGENT ----
     agent["Talk Time"]=pd.to_timedelta(agent["Talk Time"],errors="coerce").dt.total_seconds()
     total_talk=agent.groupby("Agent Name")["Talk Time"].sum()
 
-    # ---- CDR ----
     mature_mask=cdr["Disposition"].str.contains("callmatured|transfer",case=False,na=False)
     total_mature=cdr[mature_mask].groupby("Username").size()
 
@@ -121,7 +90,6 @@ def process():
 
     ob_mature=total_mature-ib_mature
 
-    # ---- CRM ----
     total_tagging=crm.groupby("CreatedByID").size()
 
     final=pd.DataFrame({
@@ -147,41 +115,17 @@ def process():
     final.to_excel(EXCEL_FILE,index=False)
     create_pdf(final)
 
-    html=THEME+f"""
+    LAST_HTML = THEME + f"""
 <div class='box'>
 <h2>Final Agent Report</h2>
 {final.to_html(index=False)}
-<br>
+<br><br>
 <a href='/download_excel'>Download Excel</a> |
 <a href='/download_pdf'>Download PDF</a>
 </div>
 """
-    open("result.html","w",encoding="utf-8").write(html)
-    return ""
 
-@app.route("/result")
-def result():
-    return open("result.html",encoding="utf-8").read()
-
-def create_pdf(df):
-    c=canvas.Canvas(PDF_FILE,pagesize=A4)
-    w,h=A4
-    c.setFont("Helvetica-Bold",10)
-    c.drawRightString(w-40,h-40,"Chandan Malakar")
-    y=h-80
-    c.setFont("Helvetica",8)
-    for col in df.columns:
-        c.drawString(40,y,str(col)); y-=12
-    y-=10
-    for _,r in df.iterrows():
-        for v in r:
-            c.drawString(40,y,str(v)); y-=12
-        y-=10
-        if y<50:
-            c.showPage()
-            c.drawRightString(w-40,h-40,"Chandan Malakar")
-            y=h-80
-    c.save()
+    return LAST_HTML
 
 @app.route("/download_excel")
 def download_excel():
@@ -190,6 +134,23 @@ def download_excel():
 @app.route("/download_pdf")
 def download_pdf():
     return send_file(PDF_FILE,as_attachment=True)
+
+def create_pdf(df):
+    c=canvas.Canvas(PDF_FILE,pagesize=A4)
+    w,h=A4
+    c.setFont("Helvetica-Bold",10)
+    c.drawRightString(w-40,h-40,"Chandan Malakar")
+    y=h-80
+    c.setFont("Helvetica",8)
+    for _,r in df.iterrows():
+        line=" | ".join([str(x) for x in r])
+        c.drawString(40,y,line)
+        y-=12
+        if y<50:
+            c.showPage()
+            c.drawRightString(w-40,h-40,"Chandan Malakar")
+            y=h-80
+    c.save()
 
 if __name__=="__main__":
     port=int(os.environ.get("PORT",5000))
