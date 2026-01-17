@@ -8,12 +8,11 @@ def clean(df):
     df.columns = df.columns.astype(str).str.strip().str.lower()
     return df
 
-def find(df, keys):
-    for c in df.columns:
-        for k in keys:
-            if k in c:
-                return c
-    return None
+def to_seconds(x):
+    try:
+        return pd.to_timedelta(x).total_seconds()
+    except:
+        return 0
 
 @app.route("/")
 def home():
@@ -23,8 +22,9 @@ def home():
 def process():
 
     files = request.files.getlist("files")
-    if len(files) != 3:
-        return "Upload exactly 3 files in order: Agent, CDR, CRM"
+
+    if len(files) != 2:
+        return "Upload exactly 2 files: Agent Performance and CDR"
 
     temp = tempfile.mkdtemp()
     paths = []
@@ -34,56 +34,55 @@ def process():
         f.save(p)
         paths.append(p)
 
-    # ---- READ FILES CORRECT ----
-    agent = clean(pd.read_excel(paths[0], header=2))   # Agent Performance
-    cdr   = clean(pd.read_excel(paths[1], header=1))   # CDR
-    crm   = clean(pd.read_excel(paths[2], header=2))   # CRM
+    # Read files
+    agent = clean(pd.read_excel(paths[0], header=2))
+    cdr   = clean(pd.read_excel(paths[1], header=1))
 
-    print("AGENT:", agent.columns.tolist())
-    print("CDR:", cdr.columns.tolist())
-    print("CRM:", crm.columns.tolist())
+    # ---- REQUIRED COLUMNS (from your file) ----
+    emp_col = "agent name"
+    login_col = "total login time"
+    talk_col = "total talk time"
 
-    # ---- COLUMN MAP ----
-    agent_id = find(agent, ["agent","name","emp","id"])
-    crm_id   = find(crm, ["createdbyid","created","emp","id"])
-    cdr_id   = find(cdr, ["username","user"])
+    lunch_col = "lunchbreak"
+    short_col = "shortbreak"
+    tea_col = "teabreak"
 
-    if not agent_id or not crm_id:
-        return f"Column missing. Agent:{agent_id}, CRM:{crm_id}"
+    meeting_col = "meeting"
+    system_col = "systemdown"
 
-    agent["empid"] = agent[agent_id].astype(str)
-    crm["empid"]   = crm[crm_id].astype(str)
+    # ---- Convert ----
+    agent["empid"] = agent[emp_col].astype(str)
 
-    # ---- BREAK ----
-    lunch = find(agent,["lunch"])
-    short = find(agent,["short"])
-    tea   = find(agent,["tea"])
+    agent["totallogin"] = agent[login_col].apply(to_seconds)
+    agent["totaltalk"] = agent[talk_col].apply(to_seconds)
 
     agent["totalbreak"] = (
-        agent.get(lunch,0).fillna(0) +
-        agent.get(short,0).fillna(0) +
-        agent.get(tea,0).fillna(0)
+        agent[lunch_col].apply(to_seconds) +
+        agent[short_col].apply(to_seconds) +
+        agent[tea_col].apply(to_seconds)
     )
 
-    # ---- LOGIN ----
-    login = find(agent,["login"])
-    agent["totallogin"] = agent.get(login,0).fillna(0)
+    agent["totalmeeting"] = (
+        agent[meeting_col].apply(to_seconds) +
+        agent[system_col].apply(to_seconds)
+    )
 
-    # ---- MEETING ----
-    meet = find(agent,["meeting","system"])
-    agent["totalmeeting"] = agent.get(meet,0).fillna(0)
+    # ---- CDR Mature ----
+    cdr["username"] = cdr["username"].astype(str)
 
-    # ---- TAGGING ----
-    tagging = crm.groupby("empid").size()
+    mature = cdr[cdr["disposition"].str.contains("call", case=False, na=False)]
+    mature_count = mature.groupby("username").size()
 
     # ---- FINAL REPORT ----
     final = pd.DataFrame()
+
     final["EMP ID"] = agent["empid"]
-    final["Agent Name"] = agent[agent_id]
-    final["Total Login"] = agent["totallogin"]
-    final["Total Break"] = agent["totalbreak"]
-    final["Total Meeting"] = agent["totalmeeting"]
-    final["Total Tagging"] = final["EMP ID"].map(tagging).fillna(0).astype(int)
+    final["Agent Name"] = agent[emp_col]
+    final["Total Login (sec)"] = agent["totallogin"]
+    final["Total Break (sec)"] = agent["totalbreak"]
+    final["Total Meeting (sec)"] = agent["totalmeeting"]
+    final["Total Talk Time (sec)"] = agent["totaltalk"]
+    final["Total Mature"] = final["EMP ID"].map(mature_count).fillna(0).astype(int)
 
     # ---- EXPORT ----
     out = os.path.join(temp,"Agent_Report.xlsx")
