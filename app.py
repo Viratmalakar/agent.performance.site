@@ -18,10 +18,10 @@ HTML = """
 {{download}}
 """
 
-def load_excel_safe(path, header_row):
+def load_excel(path, header_row):
     df = pd.read_excel(path, header=header_row, engine="openpyxl", dtype=str)
-    df = df.fillna("")
-    return df
+    df.columns = [str(c).strip() for c in df.columns]
+    return df.fillna("")
 
 @app.route("/")
 def home():
@@ -38,45 +38,56 @@ def process():
         f.save(p)
         paths.append(p)
 
-    # -------- Load all as TEXT ----------
-    login = load_excel_safe(paths[0], 2)
-    cdr   = load_excel_safe(paths[1], 1)
-    agent = load_excel_safe(paths[2], 2)
-    crm   = load_excel_safe(paths[3], 0)
+    # Load files
+    login = load_excel(paths[0], 2)
+    cdr   = load_excel(paths[1], 1)
+    agent = load_excel(paths[2], 2)
+    crm   = load_excel(paths[3], 0)
 
-    # -------- LOGIN ----------
+    # ---------- LOGIN ----------
     date_col = None
     for c in login.columns:
         if "date" in c.lower():
             date_col = c
             break
 
+    if not date_col:
+        return "Date column not found in Login report"
+
     login[date_col] = pd.to_datetime(login[date_col], errors="coerce")
     first_login = login.groupby("UserName")[date_col].min().dt.time
 
-    # -------- AGENT ----------
-    for col in ["LUNCHBREAK","SHORTBREAK","TEABREAK","MEETING","SYSTEMDOWN",
-                "Total Login Time","Total Talk Time"]:
-        agent[col] = pd.to_timedelta(agent[col], errors="coerce").dt.total_seconds()
+    # ---------- AGENT ----------
+    time_cols = ["LUNCHBREAK","SHORTBREAK","TEABREAK","MEETING","SYSTEMDOWN",
+                 "Total Login Time","Total Talk Time"]
+
+    for col in time_cols:
+        if col in agent.columns:
+            agent[col] = pd.to_timedelta(agent[col], errors="coerce").dt.total_seconds()
+        else:
+            agent[col] = 0
 
     agent["Total Break"] = agent["LUNCHBREAK"] + agent["SHORTBREAK"] + agent["TEABREAK"]
     agent["Total Meeting"] = agent["MEETING"] + agent["SYSTEMDOWN"]
     agent["Total Net Login"] = agent["Total Login Time"] - agent["Total Break"]
 
-    # -------- CDR ----------
+    # ---------- CDR ----------
+    cdr["Disposition"] = cdr["Disposition"].astype(str)
+
     cdr["Mature"] = cdr["Disposition"].isin(["CALLMATURED","TRANSFER"])
 
     total_mature = cdr.groupby("Username")["Mature"].sum()
     transfer_call = cdr[cdr["Disposition"]=="TRANSFER"].groupby("Username").size()
+
     ib_mature = cdr[
         (cdr["Disposition"].isin(["CALLMATURED","TRANSFER"])) &
         (cdr["Campaign"]=="CSRINBOUND")
     ].groupby("Username").size()
 
-    # -------- CRM ----------
+    # ---------- CRM ----------
     total_tagging = crm.groupby("CreatedByID").size()
 
-    # -------- FINAL ----------
+    # ---------- FINAL REPORT ----------
     result = pd.DataFrame()
 
     result["Employee ID"] = agent["Agent Name"]
@@ -97,7 +108,6 @@ def process():
 
     result["AHT"] = result["Total Talk Time"] / result["Total Mature"].replace(0,1)
 
-    # Convert seconds back to HH:MM:SS
     for c in ["Total Login","Total Net Login","Total Break","Total Meeting","Total Talk Time","AHT"]:
         result[c] = pd.to_timedelta(result[c], unit="s")
 
@@ -115,4 +125,4 @@ def download():
     return send_file("Final_Report.xlsx", as_attachment=True)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=10000)
