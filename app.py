@@ -1,124 +1,107 @@
-from flask import Flask, request, render_template, send_file
+from flask import Flask, render_template, request, send_file
 import pandas as pd
 import os
+import tempfile
 
 app = Flask(__name__)
 
-UPLOAD_FOLDER = "uploads"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+# ------------------ PERMANENT COLUMN NORMALIZER ------------------
+def normalize_columns(df):
+    df.columns = (
+        df.columns.astype(str)
+        .str.strip()
+        .str.lower()
+        .str.replace(" ", "")
+        .str.replace("_", "")
+    )
+    return df
 
-def to_seconds(t):
-    try:
-        return pd.to_timedelta(str(t)).total_seconds()
-    except:
-        return 0
-
-def sec_to_time(x):
-    try:
-        return str(pd.to_timedelta(int(x), unit="s"))
-    except:
-        return "00:00:00"
-
+# ------------------ HOME ------------------
 @app.route("/")
 def index():
     return render_template("index.html")
 
-@app.route("/upload")
-def upload():
-    return index()
-
+# ------------------ PROCESS ------------------
 @app.route("/process", methods=["POST"])
 def process():
 
     files = request.files.getlist("files")
 
     if len(files) != 3:
-        return "Please upload exactly 3 files: Agent, CDR, CRM"
+        return "Please upload exactly 3 files (Agent, CDR, CRM)"
 
+    temp_dir = tempfile.mkdtemp()
     paths = []
+
     for f in files:
-        path = os.path.join(UPLOAD_FOLDER, f.filename)
+        path = os.path.join(temp_dir, f.filename)
         f.save(path)
         paths.append(path)
 
-    # ===== Load Excel =====
-    agent = pd.read_excel(paths[0], header=2)
-    cdr   = pd.read_excel(paths[1], header=1)
-    crm   = pd.read_excel(paths[2], header=0)
+    # -------- READ FILES --------
+    agent = pd.read_excel(paths[0], header=0)
+    cdr = pd.read_excel(paths[1], header=1)
+    crm = pd.read_excel(paths[2], header=0)
 
-    # ===== Clean headers =====
-    agent.columns = agent.columns.astype(str)
-    cdr.columns = cdr.columns.astype(str)
-    crm.columns = crm.columns.astype(str)
+    # -------- NORMALIZE --------
+    agent = normalize_columns(agent)
+    cdr = normalize_columns(cdr)
+    crm = normalize_columns(crm)
 
-    # ===== Rename ID columns =====
-    agent.rename(columns={"Agent Name":"EMP ID"}, inplace=True)
-    cdr.rename(columns={"Username":"EMP ID"}, inplace=True)
+    # -------- CREATE EMP ID --------
+    agent["empid"] = agent["agentname"]
+    cdr["empid"] = cdr["username"]
+    crm["empid"] = crm["createdbyid"]
 
-    # CRM mapping (as you said)
-    crm["EMP ID"] = crm["CreatedByID"]
+    # -------- SAFE NUMERIC CONVERT --------
+    numeric_cols = agent.columns
+    for c in numeric_cols:
+        agent[c] = pd.to_numeric(agent[c], errors="ignore")
 
-    # ===== Time columns =====
-    time_cols = [
-        "Total Login Time","LUNCHBREAK","SHORTBREAK","TEABREAK",
-        "MEETING","SYSTEMDOWN","Total Talk Time"
-    ]
-
-    for c in time_cols:
-        if c in agent.columns:
-            agent[c] = agent[c].apply(to_seconds)
-        else:
-            agent[c] = 0
-
-    # ===== Calculations =====
-    agent["Total Break"] = agent["LUNCHBREAK"] + agent["SHORTBREAK"] + agent["TEABREAK"]
-    agent["Total Meeting"] = agent["MEETING"] + agent["SYSTEMDOWN"]
-    agent["Total Net Login"] = agent["Total Login Time"] - agent["Total Break"]
-
-    # ===== CDR Mature =====
-    cdr["Disposition"] = cdr["Disposition"].astype(str)
-
-    mature = cdr[cdr["Disposition"].str.contains("CALLMATURED|TRANSFER", case=False, na=False)]
-
-    total_mature = mature.groupby("EMP ID").size()
-    ib_mature = mature[mature["Campaign"]=="CSRINBOUND"].groupby("EMP ID").size()
-    transfer_call = cdr[cdr["Disposition"].str.contains("TRANSFER", case=False, na=False)].groupby("EMP ID").size()
-
-    # ===== CRM Tagging =====
-    tagging = crm.groupby("EMP ID").size()
-
-    # ===== Final Report =====
-    final = agent.copy()
-
-    final["Total Mature"] = final["EMP ID"].map(total_mature).fillna(0).astype(int)
-    final["IB Mature"] = final["EMP ID"].map(ib_mature).fillna(0).astype(int)
-    final["Transfer Call"] = final["EMP ID"].map(transfer_call).fillna(0).astype(int)
-    final["OB Mature"] = final["Total Mature"] - final["IB Mature"]
-    final["Total Tagging"] = final["EMP ID"].map(tagging).fillna(0).astype(int)
-
-    final["AHT"] = final["Total Talk Time"] / final["Total Mature"].replace(0,1)
-
-    # ===== Convert back to time =====
-    for c in ["Total Login Time","Total Net Login","Total Break","Total Meeting","Total Talk Time","AHT"]:
-        final[c] = final[c].apply(sec_to_time)
-
-    final = final[[
-        "EMP ID","Total Login Time","Total Net Login","Total Break",
-        "Total Meeting","Total Talk Time","AHT","Total Mature",
-        "IB Mature","Transfer Call","OB Mature","Total Tagging"
-    ]]
-
-    output = "final_report.xlsx"
-    final.to_excel(output,index=False)
-
-    return render_template("result.html",
-        tables=final.to_html(index=False, classes="table table-bordered"),
-        file=output
+    # -------- TOTAL BREAK --------
+    agent["totalbreak"] = (
+        agent.get("lunchbreak", 0) +
+        agent.get("shortbreak", 0) +
+        agent.get("teabreak", 0)
     )
 
-@app.route("/download")
-def download():
-    return send_file("final_report.xlsx", as_attachment=True)
+    # -------- TOTAL MEETING --------
+    agent["totalmeeting"] = agent.get("meeting", 0)
 
+    # -------- TAGGING --------
+    tagging = crm.groupby("empid").size()
+
+    # -------- MERGE --------
+    final = agent.copy()
+    final["totaltagging"] = final["empid"].map(tagging).fillna(0)
+
+    # -------- RENAME OUTPUT --------
+    final = final.rename(columns={
+        "empid": "EMP ID",
+        "agentname": "Agent Name",
+        "totallogintime": "Total Login",
+        "totalbreak": "Total Break",
+        "totalmeeting": "Total Meeting",
+        "totaltagging": "Total Tagging"
+    })
+
+    show_cols = [
+        "EMP ID",
+        "Agent Name",
+        "Total Login",
+        "Total Break",
+        "Total Meeting",
+        "Total Tagging"
+    ]
+
+    final = final[show_cols]
+
+    # -------- SAVE FILE --------
+    output_path = os.path.join(temp_dir, "Agent_Performance_Report.xlsx")
+    final.to_excel(output_path, index=False)
+
+    return send_file(output_path, as_attachment=True)
+
+# ------------------ RUN ------------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
