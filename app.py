@@ -26,17 +26,17 @@ def process():
         for f in files:
             name = f.filename.lower()
 
-            # IMPORTANT: header is on 3rd row
-            df = pd.read_excel(f, header=2)
-
             if "login" in name:
-                login = df
+                login = pd.read_excel(f, header=2)
+
             elif "cdr" in name:
-                cdr = df
+                cdr = pd.read_excel(f, header=1)
+
             elif "agent" in name:
-                agent = df
+                agent = pd.read_excel(f, header=2)
+
             elif "crm" in name or "detail" in name:
-                crm = df
+                crm = pd.read_excel(f, header=0)
 
         if any(x is None for x in [login, cdr, agent, crm]):
             return "❌ All 4 reports not detected properly."
@@ -50,7 +50,7 @@ def process():
         <b>CRM Columns:</b><br>{list(crm.columns)}
         """
 
-    except Exception as e:
+    except Exception:
         return "<pre>" + traceback.format_exc() + "</pre>"
 
 if __name__ == "__main__":
