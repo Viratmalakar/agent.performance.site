@@ -1,128 +1,116 @@
-from flask import Flask, request, send_file, render_template_string
+from flask import Flask, render_template, request, send_file
 import pandas as pd
 import os
+from io import BytesIO
 
 app = Flask(__name__)
 
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-HTML = """
-<h2>Upload 4 Excel Reports</h2>
-<form method="post" action="/process" enctype="multipart/form-data">
-<input type="file" name="files" multiple required><br><br>
-<button>Process</button>
-</form>
-<br>
-{{table}}
-{{download}}
-"""
-
-def load_excel(path, header_row):
-    df = pd.read_excel(path, header=header_row, engine="openpyxl", dtype=str)
-    df.columns = [str(c).strip() for c in df.columns]
-    return df.fillna("")
+def to_seconds(t):
+    try:
+        return pd.to_timedelta(str(t)).total_seconds()
+    except:
+        return 0
 
 @app.route("/")
-def home():
-    return render_template_string(HTML, table="", download="")
+def index():
+    return render_template("index.html")
 
 @app.route("/process", methods=["POST"])
 def process():
 
     files = request.files.getlist("files")
+
     paths = []
-
     for f in files:
-        p = os.path.join(UPLOAD_FOLDER, f.filename)
-        f.save(p)
-        paths.append(p)
+        path = os.path.join(UPLOAD_FOLDER, f.filename)
+        f.save(path)
+        paths.append(path)
 
-    # Load files
-    login = load_excel(paths[0], 2)
-    cdr   = load_excel(paths[1], 1)
-    agent = load_excel(paths[2], 2)
-    crm   = load_excel(paths[3], 0)
+    # ===== Load Files =====
+    agent = pd.read_excel(paths[0], header=2)
+    cdr = pd.read_excel(paths[1], header=1)
+    crm = pd.read_excel(paths[2], header=0)
 
-    # ---------- LOGIN ----------
-    date_col = None
-    for c in login.columns:
-        if "date" in c.lower():
-            date_col = c
-            break
+    # ===== Clean headers =====
+    agent.columns = agent.columns.astype(str)
+    cdr.columns = cdr.columns.astype(str)
+    crm.columns = crm.columns.astype(str)
 
-    if not date_col:
-        return "Date column not found in Login report"
+    # ===== Rename IDs =====
+    agent.rename(columns={"Agent Name":"EMP ID"}, inplace=True)
+    cdr.rename(columns={"Username":"EMP ID"}, inplace=True)
+    crm.rename(columns={"CreatedByID":"EMP ID"}, inplace=True)
 
-    login[date_col] = pd.to_datetime(login[date_col], errors="coerce")
-    first_login = login.groupby("UserName")[date_col].min().dt.time
+    # ===== Convert all time columns to seconds =====
+    time_cols = [
+        "Total Login Time","LUNCHBREAK","SHORTBREAK","TEABREAK",
+        "MEETING","SYSTEMDOWN","Total Talk Time"
+    ]
 
-    # ---------- AGENT ----------
-    time_cols = ["LUNCHBREAK","SHORTBREAK","TEABREAK","MEETING","SYSTEMDOWN",
-                 "Total Login Time","Total Talk Time"]
+    for c in time_cols:
+        if c in agent.columns:
+            agent[c] = agent[c].apply(to_seconds)
 
-    for col in time_cols:
-        if col in agent.columns:
-            agent[col] = pd.to_timedelta(agent[col], errors="coerce").dt.total_seconds()
-        else:
-            agent[col] = 0
-
+    # ===== Calculations =====
     agent["Total Break"] = agent["LUNCHBREAK"] + agent["SHORTBREAK"] + agent["TEABREAK"]
     agent["Total Meeting"] = agent["MEETING"] + agent["SYSTEMDOWN"]
+
     agent["Total Net Login"] = agent["Total Login Time"] - agent["Total Break"]
 
-    # ---------- CDR ----------
+    # ===== CDR Mature =====
     cdr["Disposition"] = cdr["Disposition"].astype(str)
 
-    cdr["Mature"] = cdr["Disposition"].isin(["CALLMATURED","TRANSFER"])
+    mature = cdr[cdr["Disposition"].str.contains("CALLMATURED|TRANSFER", case=False, na=False)]
 
-    total_mature = cdr.groupby("Username")["Mature"].sum()
-    transfer_call = cdr[cdr["Disposition"]=="TRANSFER"].groupby("Username").size()
+    total_mature = mature.groupby("EMP ID").size()
 
-    ib_mature = cdr[
-        (cdr["Disposition"].isin(["CALLMATURED","TRANSFER"])) &
-        (cdr["Campaign"]=="CSRINBOUND")
-    ].groupby("Username").size()
+    ib_mature = mature[mature["Campaign"]=="CSRINBOUND"].groupby("EMP ID").size()
 
-    # ---------- CRM ----------
-    total_tagging = crm.groupby("CreatedByID").size()
+    transfer_call = cdr[cdr["Disposition"].str.contains("TRANSFER",case=False,na=False)].groupby("EMP ID").size()
 
-    # ---------- FINAL REPORT ----------
-    result = pd.DataFrame()
+    # ===== CRM Tagging =====
+    tagging = crm.groupby("EMP ID").size()
 
-    result["Employee ID"] = agent["Agent Name"]
-    result["Agent Name"] = agent["Agent Name"]
-    result["First Login Time"] = result["Employee ID"].map(first_login)
+    # ===== Merge =====
+    final = agent.copy()
 
-    result["Total Login"] = agent["Total Login Time"]
-    result["Total Net Login"] = agent["Total Net Login"]
-    result["Total Break"] = agent["Total Break"]
-    result["Total Meeting"] = agent["Total Meeting"]
-    result["Total Talk Time"] = agent["Total Talk Time"]
+    final["Total Mature"] = final["EMP ID"].map(total_mature).fillna(0).astype(int)
+    final["IB Mature"] = final["EMP ID"].map(ib_mature).fillna(0).astype(int)
+    final["Transfer Call"] = final["EMP ID"].map(transfer_call).fillna(0).astype(int)
+    final["OB Mature"] = final["Total Mature"] - final["IB Mature"]
+    final["Total Tagging"] = final["EMP ID"].map(tagging).fillna(0).astype(int)
 
-    result["Total Mature"] = result["Employee ID"].map(total_mature).fillna(0)
-    result["IB Mature"] = result["Employee ID"].map(ib_mature).fillna(0)
-    result["Transfer Call"] = result["Employee ID"].map(transfer_call).fillna(0)
-    result["OB Mature"] = result["Total Mature"] - result["IB Mature"]
-    result["Total Tagging"] = result["Employee ID"].map(total_tagging).fillna(0)
+    # ===== AHT =====
+    final["AHT"] = final["Total Talk Time"] / final["Total Mature"].replace(0,1)
 
-    result["AHT"] = result["Total Talk Time"] / result["Total Mature"].replace(0,1)
+    # ===== Convert back to time =====
+    def sec_to_time(x):
+        return str(pd.to_timedelta(int(x), unit="s"))
 
-    for c in ["Total Login","Total Net Login","Total Break","Total Meeting","Total Talk Time","AHT"]:
-        result[c] = pd.to_timedelta(result[c], unit="s")
+    for c in ["Total Login Time","Total Net Login","Total Break","Total Meeting","Total Talk Time","AHT"]:
+        final[c] = final[c].apply(sec_to_time)
 
-    output = "Final_Report.xlsx"
-    result.to_excel(output, index=False)
+    final = final[[
+        "EMP ID","Total Login Time","Total Net Login","Total Break",
+        "Total Meeting","Total Talk Time","AHT","Total Mature",
+        "IB Mature","Transfer Call","OB Mature","Total Tagging"
+    ]]
 
-    return render_template_string(
-        HTML,
-        table=result.to_html(index=False),
-        download='<br><a href="/download"><button>Download Excel</button></a>'
+    # ===== Save Excel =====
+    output_path = "final_report.xlsx"
+    final.to_excel(output_path,index=False)
+
+    return render_template("result.html",
+        tables=final.to_html(index=False,classes="table table-bordered"),
+        file=output_path
     )
 
 @app.route("/download")
 def download():
-    return send_file("Final_Report.xlsx", as_attachment=True)
+    return send_file("final_report.xlsx", as_attachment=True)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    app.run(port=10000)
