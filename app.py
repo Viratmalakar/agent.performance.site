@@ -55,8 +55,19 @@ def process():
     crm = pd.read_excel(paths[3])
 
     # -------- LOGIN --------
-    login["Date"] = pd.to_datetime(login["Date"])
-    first_login = login.groupby("UserName")["Date"].min().dt.time
+# Auto detect date column
+date_col = None
+for c in login.columns:
+    if "date" in c.lower() or "time" in c.lower():
+        date_col = c
+        break
+
+if not date_col:
+    return "Date column not found in Login report"
+
+login[date_col] = pd.to_datetime(login[date_col], errors="coerce")
+first_login = login.groupby("UserName")[date_col].min().dt.time
+
 
     # -------- AGENT --------
     agent["Total Break"] = agent["LUNCHBREAK"] + agent["SHORTBREAK"] + agent["TEABREAK"]
@@ -108,3 +119,4 @@ def download():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
+
