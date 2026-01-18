@@ -4,11 +4,11 @@ import os, tempfile
 
 app = Flask(__name__)
 
-def clean(df):
+def clean_cols(df):
     df.columns = df.columns.astype(str).str.strip().str.lower()
     return df
 
-def find(df, keys):
+def find_col(df, keys):
     for c in df.columns:
         for k in keys:
             if k in c:
@@ -26,7 +26,7 @@ def process():
     cdr_file = request.files.get("cdr_file")
 
     if not agent_file or not cdr_file:
-        return "Both files required"
+        return "Upload both Agent and CDR files"
 
     temp = tempfile.mkdtemp()
 
@@ -36,42 +36,57 @@ def process():
     agent_file.save(agent_path)
     cdr_file.save(cdr_path)
 
-    # ---------- READ ----------
-    agent = pd.read_excel(agent_path, dtype=str)
-    cdr   = pd.read_excel(cdr_path, dtype=str)
+    # -------- SAFE READ --------
+    agent = pd.read_excel(agent_path, header=None, dtype=str, engine="openpyxl")
+    cdr = pd.read_excel(cdr_path, header=None, dtype=str, engine="openpyxl")
 
-    agent = clean(agent)
-    cdr   = clean(cdr)
+    # -------- ROW FIX --------
+    agent = agent.iloc[2:].reset_index(drop=True)
+    cdr = cdr.iloc[1:].reset_index(drop=True)
 
-    # ---------- DASH FIX ----------
+    # -------- COLUMN LIMIT --------
+    agent = agent.iloc[:, :31]
+    cdr = cdr.iloc[:, :29]
+
+    # -------- SET HEADER --------
+    agent.columns = agent.iloc[0]
+    agent = agent[1:].reset_index(drop=True)
+
+    cdr.columns = cdr.iloc[0]
+    cdr = cdr[1:].reset_index(drop=True)
+
+    # -------- CLEAN --------
+    agent = clean_cols(agent)
+    cdr = clean_cols(cdr)
+
+    # -------- DASH FIX --------
     agent.replace("-", "00:00:00", inplace=True)
 
-    # ---------- FIND ----------
-    agent_name_col = find(agent, ["agent name","agent full name","agent"])
-    login_col = find(agent, ["total login"])
-    break_col = find(agent, ["total break"])
-    meeting_col = find(agent, ["meeting"])
+    # -------- COLUMN FIND --------
+    agent_name = find_col(agent, ["agent name","agent full name","agent"])
+    login = find_col(agent, ["total login"])
+    break_col = find_col(agent, ["total break"])
+    meeting = find_col(agent, ["meeting"])
 
-    cdr_user_col = find(cdr, ["username","user name","user"])
+    cdr_user = find_col(cdr, ["username","user name","user"])
 
-    if not agent_name_col or not cdr_user_col:
-        return f"Column missing. Agent:{agent_name_col}, CDR:{cdr_user_col}"
+    if not agent_name or not cdr_user:
+        return f"Column missing. Agent:{agent_name}, CDR:{cdr_user}"
 
-    # ---------- CDR COUNT ----------
-    call_count = cdr.groupby(cdr_user_col).size()
+    # -------- CDR COUNT --------
+    call_count = cdr.groupby(cdr_user).size()
 
-    # ---------- FINAL ----------
+    # -------- FINAL REPORT --------
     final = pd.DataFrame()
-    final["Agent Name"] = agent[agent_name_col]
-    final["Total Login"] = agent.get(login_col, "00:00:00")
+    final["Agent Name"] = agent[agent_name]
+    final["Total Login"] = agent.get(login, "00:00:00")
     final["Total Break"] = agent.get(break_col, "00:00:00")
-    final["Meeting"] = agent.get(meeting_col, "00:00:00")
-
+    final["Meeting"] = agent.get(meeting, "00:00:00")
     final["Total Calls"] = final["Agent Name"].map(call_count).fillna(0).astype(int)
 
-    # ---------- EXPORT ----------
-    out = os.path.join(temp,"Agent_Report.xlsx")
-    final.to_excel(out,index=False)
+    # -------- EXPORT --------
+    out = os.path.join(temp, "Agent_Performance_Report.xlsx")
+    final.to_excel(out, index=False, engine="openpyxl")
 
     return send_file(out, as_attachment=True)
 
