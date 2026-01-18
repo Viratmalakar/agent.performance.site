@@ -1,82 +1,62 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Agent Performance Report</title>
+<title>Agent Performance</title>
 <style>
-body{
-font-family:Segoe UI;
-background:#0f172a;
-color:white;
-padding:30px;
-}
-.box{
-background:#020617;
-padding:25px;
-border-radius:12px;
-max-width:1200px;
-margin:auto;
-box-shadow:0 0 15px #38bdf8;
-}
-input,button{
-padding:10px;
-border-radius:6px;
-border:none;
-margin:5px;
-}
-button{
-background:#38bdf8;
-color:black;
-font-weight:bold;
-cursor:pointer;
-}
-table{
-width:100%;
-border-collapse:collapse;
-margin-top:20px;
-}
-th,td{
-border:1px solid #334155;
-padding:8px;
-text-align:center;
-}
-th{
-background:#020617;
-color:#38bdf8;
+body{background:#f8fff8;font-family:Segoe UI;}
+.box{background:white;padding:25px;border-radius:12px;max-width:1200px;margin:auto;box-shadow:0 0 10px #16a34a;}
+button{background:#16a34a;color:white;border:none;padding:10px 15px;border-radius:6px;margin:5px;font-weight:bold;cursor:pointer;}
+table{width:100%;border-collapse:collapse;margin-top:20px;}
+th,td{border:1px solid #ccc;padding:8px;text-align:center;}
+th{background:#dcfce7;color:#166534;}
+#loading{
+position:fixed;top:0;left:0;width:100%;height:100%;
+background:white;display:none;align-items:center;justify-content:center;
+font-size:28px;color:#16a34a;font-weight:bold;
 }
 </style>
 </head>
 <body>
 
+<div id="loading">Generating Report...</div>
+
 <div class="box">
-<h2>Agent Performance Generator</h2>
+<h2 style="color:#166534">Agent Performance Report</h2>
 
 <input type="file" id="agent">
-<input type="file" id="cdr">
-<br>
-<button onclick="generate()">Generate Report</button>
-<button onclick="reset()">Reset</button>
-<button onclick="exportExcel()">Export Excel</button>
+<input type="file" id="cdr"><br>
+
+<button onclick="generate()">Generate</button>
+<button id="exportBtn" onclick="exportExcel()" style="display:none">Export</button>
+<button id="copyBtn" onclick="copyTable()" style="display:none">Copy Table</button>
+<button id="resetBtn" onclick="resetAll()" style="display:none">Reset</button>
 
 <div id="table"></div>
 </div>
 
 <script>
-let reportData=[];
+let report=[];
 
 function generate(){
+document.getElementById("loading").style.display="flex";
+
 let f=new FormData();
-f.append("agent",document.getElementById("agent").files[0]);
-f.append("cdr",document.getElementById("cdr").files[0]);
+f.append("agent",agent.files[0]);
+f.append("cdr",cdr.files[0]);
 
 fetch("/process",{method:"POST",body:f})
 .then(r=>r.json())
 .then(d=>{
-reportData=d;
-drawTable(d);
+report=d;
+draw(d);
+document.getElementById("loading").style.display="none";
+exportBtn.style.display="inline";
+copyBtn.style.display="inline";
+resetBtn.style.display="inline";
 });
 }
 
-function drawTable(d){
+function draw(d){
 let h="<table><tr>";
 Object.keys(d[0]).forEach(k=>h+="<th>"+k+"</th>");
 h+="</tr>";
@@ -86,11 +66,11 @@ Object.values(r).forEach(v=>h+="<td>"+v+"</td>");
 h+="</tr>";
 });
 h+="</table>";
-document.getElementById("table").innerHTML=h;
+table.innerHTML=h;
 }
 
 function exportExcel(){
-fetch("/export",{method:"POST",body:JSON.stringify(reportData)})
+fetch("/export",{method:"POST",body:JSON.stringify(report)})
 .then(r=>r.blob())
 .then(b=>{
 let a=document.createElement("a");
@@ -100,11 +80,20 @@ a.click();
 });
 }
 
-function reset(){
-document.getElementById("agent").value="";
-document.getElementById("cdr").value="";
-document.getElementById("table").innerHTML="";
-reportData=[];
+function copyTable(){
+let text=document.getElementById("table").innerText;
+navigator.clipboard.writeText(text);
+alert("Table copied successfully");
+}
+
+function resetAll(){
+agent.value="";
+cdr.value="";
+table.innerHTML="";
+report=[];
+exportBtn.style.display="none";
+copyBtn.style.display="none";
+resetBtn.style.display="none";
 }
 </script>
 
