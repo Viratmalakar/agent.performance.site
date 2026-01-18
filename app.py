@@ -1,27 +1,27 @@
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, send_file
 import pandas as pd
+import io, json
 from datetime import datetime
-import io
 
 app = Flask(__name__)
 
 def fix_time(x):
-    if pd.isna(x) or x=="-" or x=="nan":
+    if pd.isna(x) or str(x).strip().lower() in ["-","nan",""]:
         return "00:00:00"
     return str(x)
 
-def time_to_sec(t):
+def tsec(t):
     try:
-        h,m,s = t.split(":")
-        return int(h)*3600+int(m)*60+int(s)
+        h,m,s=map(int,str(t).split(":"))
+        return h*3600+m*60+s
     except:
         return 0
 
-def sec_to_time(s):
+def stime(s):
     h=s//3600
     m=(s%3600)//60
-    sec=s%60
-    return f"{h:02}:{m:02}:{sec:02}"
+    s=s%60
+    return f"{h:02d}:{m:02d}:{s:02d}"
 
 @app.route("/")
 def index():
@@ -30,137 +30,65 @@ def index():
 @app.route("/process",methods=["POST"])
 def process():
 
-    agent = pd.read_excel(request.files["agent"],dtype=str)
-    cdr   = pd.read_excel(request.files["cdr"],dtype=str)
+    agent=pd.read_excel(request.files["agent"])
+    cdr=pd.read_excel(request.files["cdr"])
 
-    agent = agent.iloc[2:]
-    cdr   = cdr.iloc[1:]
+    agent.iloc[:,1:31]=agent.iloc[:,1:31].astype(str).replace("-", "00:00:00")
 
-    agent.fillna("00:00:00",inplace=True)
-    cdr.fillna("",inplace=True)
+    emp=agent.columns[1]
+    full=agent.columns[2]
+    login=agent.columns[3]
+    talk=agent.columns[5]
 
-    agent.iloc[:,1:31] = agent.iloc[:,1:31].replace("-", "00:00:00")
+    t=agent.columns[19]; u=agent.columns[20]
+    w=agent.columns[22]; x=agent.columns[23]; y=agent.columns[24]
 
-    # AGENT COLUMN MAP
-    EMP_COL = agent.columns[1]
-    FULLNAME_COL = agent.columns[2]
-    D = agent.columns[3]
-    F = agent.columns[5]
-    T = agent.columns[19]
-    W = agent.columns[22]
-    Y = agent.columns[24]
-    U = agent.columns[20]
-    X = agent.columns[23]
+    c_emp=cdr.columns[1]
+    camp=cdr.columns[6]
+    disp=cdr.columns[25]
 
-    # CDR COLUMN MAP (BY NAME)
-    USER_COL = "Username"
-    CAMP_COL = "Campaign"
-    DISP_COL = "Disposition"
-    DISP_TYPE_COL = "DispositionType"
+    cdr[disp]=cdr[disp].astype(str)
+    cdr[camp]=cdr[camp].astype(str)
 
-    for col in [USER_COL, CAMP_COL, DISP_COL, DISP_TYPE_COL]:
-        if col not in cdr.columns:
-            return jsonify({"error":f"Missing column in CDR: {col}"})
+    mature=cdr[cdr[disp].str.contains("callmature|transfer",case=False,na=False)]
+    ib=mature[mature[camp].str.upper()=="CSRINBOUND"]
 
-    agent_groups = dict(tuple(agent.groupby(EMP_COL)))
-    cdr_groups = dict(tuple(cdr.groupby(USER_COL)))
+    mature_cnt=mature.groupby(c_emp).size()
+    ib_cnt=ib.groupby(c_emp).size()
 
-    final = []
-    grand_total_mature = 0
-    grand_total_ivr = 0
-    grand_talk_sec = 0
+    final=pd.DataFrame()
+    final["Agent Name"]=agent[emp]
+    final["Agent Full Name"]=agent[full]
+    final["Total Login Time"]=agent[login].apply(fix_time)
 
-    for emp in agent_groups:
+    final["Total Break"]=(agent[t].apply(tsec)+agent[w].apply(tsec)+agent[y].apply(tsec)).apply(stime)
+    final["Total Meeting"]=(agent[u].apply(tsec)+agent[x].apply(tsec)).apply(stime)
 
-        a = agent_groups[emp]
-        c = cdr_groups.get(emp,pd.DataFrame())
+    final["Total Net Login"]=(agent[login].apply(tsec)-final["Total Break"].apply(tsec)).apply(stime)
 
-        fullname = a[FULLNAME_COL].iloc[0]
+    final["Total Talk Time"]=agent[talk].apply(fix_time)
 
-        total_login = sum(a[D].apply(lambda x: time_to_sec(fix_time(x))))
-        total_break = sum(a[T].apply(lambda x: time_to_sec(fix_time(x)))) + \
-                      sum(a[W].apply(lambda x: time_to_sec(fix_time(x)))) + \
-                      sum(a[Y].apply(lambda x: time_to_sec(fix_time(x))))
+    final["Total Mature"]=final["Agent Name"].map(mature_cnt).fillna(0).astype(int)
+    final["IB Mature"]=final["Agent Name"].map(ib_cnt).fillna(0).astype(int)
+    final["OB Mature"]=final["Total Mature"]-final["IB Mature"]
 
-        total_meeting = sum(a[U].apply(lambda x: time_to_sec(fix_time(x)))) + \
-                        sum(a[X].apply(lambda x: time_to_sec(fix_time(x))))
+    final["AHT"]=(final["Total Talk Time"].apply(tsec)/final["Total Mature"].replace(0,1)).astype(int).apply(stime)
 
-        net_login = total_login - total_break
-        talk_sec = sum(a[F].apply(lambda x: time_to_sec(fix_time(x))))
+    # ❌ REMOVE BAD ROWS
+    final=final[~final["Agent Name"].astype(str).str.lower().isin(["nan","agent name"])]
+    final=final.dropna(how="all")
 
-        mature = c[c[DISP_TYPE_COL].str.contains("callmature|transfer",case=False,na=False)]
-        total_mature = len(mature)
-
-        ib = mature[mature[CAMP_COL].str.contains("CSRINBOUND",case=False,na=False)]
-        ib_mature = len(ib)
-        ob_mature = total_mature - ib_mature
-
-        ivr_hit = len(c[c[CAMP_COL].str.contains("CSRINBOUND",case=False,na=False)])
-
-        if total_mature>0:
-            aht = sec_to_time(int(talk_sec/total_mature))
-        else:
-            aht = "00:00:00"
-
-        grand_total_mature += total_mature
-        grand_total_ivr += ivr_hit
-        grand_talk_sec += talk_sec
-
-        final.append([
-            emp, fullname,
-            sec_to_time(total_login),
-            sec_to_time(net_login),
-            sec_to_time(total_break),
-            sec_to_time(total_meeting),
-            sec_to_time(talk_sec),
-            aht,
-            total_mature,
-            ib_mature,
-            ob_mature,
-            ivr_hit
-        ])
-
-    if grand_total_mature>0:
-        grand_aht = sec_to_time(int(grand_talk_sec/grand_total_mature))
-    else:
-        grand_aht="00:00:00"
-
-    final.append([
-        "GRAND TOTAL","",
-        "","","","",
-        sec_to_time(grand_talk_sec),
-        grand_aht,
-        grand_total_mature,
-        "",
-        "",
-        grand_total_ivr
-    ])
-
-    columns = [
-        "Employee ID","Full Name",
-        "Total Login","Net Login","Total Break","Total Meeting",
-        "Total Talk Time","AHT",
-        "Total Mature","IB Mature","OB Mature","Total IVR Hit"
-    ]
-
-    output=[]
-    for row in final:
-        output.append(dict(zip(columns,row)))
-
-    return jsonify(output)
+    return final.to_json(orient="records")
 
 @app.route("/export",methods=["POST"])
 def export():
-    data = request.get_json()
-    df = pd.DataFrame(data)
+    data=pd.DataFrame(json.loads(request.data.decode()))
 
-    output = io.BytesIO()
-    df.to_excel(output,index=False)
-    output.seek(0)
+    out=io.BytesIO()
+    data.to_excel(out,index=False)
+    out.seek(0)
 
-    filename = "Agent_Report_"+datetime.now().strftime("%Y-%m-%d_%H-%M-%S")+".xlsx"
+    now=datetime.now().strftime("%d-%m-%y %H:%M:%S")
+    fname=f"Agent_Performance_Report_Chandan-Malakar & {now}.xlsx"
 
-    return send_file(output,as_attachment=True,download_name=filename,mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-
-if __name__ == "__main__":
-    app.run(debug=True)
+    return send_file(out,download_name=fname,as_attachment=True)
