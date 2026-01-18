@@ -1,107 +1,55 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Agent Performance Dashboard</title>
+<title>Agent Performance</title>
 <style>
-body{font-family:Segoe UI;background:#f4fff7;margin:0}
-.container{max-width:1400px;margin:auto;padding:20px}
-h1{color:#1fa463;text-align:center}
-.box{background:white;padding:20px;border-radius:10px;box-shadow:0 0 15px rgba(0,0,0,.1)}
-input,button{padding:10px;border-radius:6px;border:1px solid #ccc}
-button{background:#1fa463;color:white;font-weight:bold;cursor:pointer}
-button:hover{background:#148a4f}
-table{width:100%;border-collapse:collapse;margin-top:20px}
-th{background:#1fa463;color:white;border:1px solid #ccc;padding:8px}
-td{border:1px solid #ccc;padding:8px;text-align:center}
-.grand{background:#eafff1;font-weight:bold}
-.footer{text-align:center;color:#555;margin-top:30px}
+body{font-family:Arial;background:#f5fff5}
+h2{color:#0b7d3b}
+table{border-collapse:collapse;width:100%}
+th,td{border:1px solid #0b7d3b;padding:6px;text-align:center}
+th{background:#0b7d3b;color:white}
+#loader{display:none;font-size:22px;color:green;text-align:center}
+button{padding:8px 15px;background:#0b7d3b;color:white;border:none;border-radius:5px}
 </style>
 </head>
 <body>
 
-<div class="container">
-<h1>Agent Performance Dashboard</h1>
+<h2>Agent Performance Report</h2>
 
-<div class="box">
-<p><b>Agent Performance Report File</b></p>
-<input type="file" id="agent">
+<form id="form">
+Agent Performance: <input type="file" name="agent" required><br><br>
+CDR Report: <input type="file" name="cdr" required><br><br>
+<button type="submit">Generate</button>
+</form>
 
-<p><b>CDR Report File</b></p>
-<input type="file" id="cdr">
+<div id="loader">⏳ Generating Report...</div>
 
-<br><br>
-<button onclick="generate()">Generate Report</button>
-<button onclick="exportExcel()" id="exp" style="display:none">Export Excel</button>
-<button onclick="copyImage()" id="cpy" style="display:none">Copy Table Image</button>
-<button onclick="location.reload()" id="rst" style="display:none">Reset</button>
-</div>
-
-<div id="loading" style="display:none;text-align:center;margin-top:20px">
-<h2>Generating Report...</h2>
-</div>
-
-<div id="tablebox"></div>
-
-<div class="footer">Website created by Chandan Malakar</div>
-</div>
+<table id="table"></table>
 
 <script>
-let finalData=[]
+document.getElementById("form").onsubmit = async function(e){
+e.preventDefault();
+document.getElementById("loader").style.display="block";
 
-function generate(){
- document.getElementById("loading").style.display="block"
+let fd=new FormData(this);
 
- let f=new FormData()
- f.append("agent",agent.files[0])
- f.append("cdr",cdr.files[0])
+let res = await fetch("/process",{method:"POST",body:fd});
+let data = await res.json();
 
- fetch("/process",{method:"POST",body:f})
- .then(r=>r.json())
- .then(d=>{
-   document.getElementById("loading").style.display="none"
-   finalData=[...d.table,d.grand]
-   render(d.table,d.grand)
-   exp.style.display=cpy.style.display=rst.style.display="inline-block"
- })
+let html="<tr><th>Agent ID</th><th>Full Name</th><th>Total Login</th><th>Net Login</th><th>Total Break</th><th>Total Meeting</th><th>Total Talk</th><th>AHT</th><th>Total Mature</th><th>IB Mature</th><th>OB Mature</th><th>Total IVR Hit</th></tr>";
+
+for(let r of data){
+html+="<tr>";
+for(let c of r){ html+="<td>"+c+"</td>"; }
+html+="</tr>";
 }
 
-function render(rows,grand){
- let html="<table><tr>"
- Object.keys(rows[0]).forEach(h=>html+="<th>"+h+"</th>")
- html+="</tr>"
-
- rows.forEach(r=>{
-   html+="<tr>"
-   Object.values(r).forEach(v=>html+="<td>"+v+"</td>")
-   html+="</tr>"
- })
-
- html+="<tr class='grand'>"
- Object.values(grand).forEach(v=>html+="<td>"+v+"</td>")
- html+="</tr></table>"
-
- tablebox.innerHTML=html
-}
-
-function exportExcel(){
- fetch("/export",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify(finalData)})
- .then(r=>r.blob())
- .then(b=>{
-   let a=document.createElement("a")
-   a.href=URL.createObjectURL(b)
-   a.download="report.xlsx"
-   a.click()
- })
-}
-
-function copyImage(){
- html2canvas(document.querySelector("table")).then(c=>{
-   c.toBlob(b=>navigator.clipboard.write([new ClipboardItem({'image/png':b})]))
- })
+document.getElementById("table").innerHTML=html;
+document.getElementById("loader").style.display="none";
 }
 </script>
 
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<p style="text-align:center;color:green">Website created by Chandan Malakar</p>
 
 </body>
 </html>
