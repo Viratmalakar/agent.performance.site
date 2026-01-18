@@ -1,20 +1,61 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Agent Performance Processor</title>
+    <title>Agent Performance Report</title>
+    <style>
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            font-size: 13px;
+        }
+        th, td {
+            border: 1px solid #444;
+            padding: 6px;
+            text-align: center;
+        }
+        th {
+            background-color: #222;
+            color: white;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 15px;
+            margin-top: 10px;
+        }
+    </style>
 </head>
 <body>
-    <h2>Upload Reports</h2>
 
-    <form action="/process" method="post" enctype="multipart/form-data">
-        <p>Agent Performance Excel:</p>
-        <input type="file" name="agent_file" required>
+<h2>Upload Reports</h2>
 
-        <p>CDR Excel:</p>
-        <input type="file" name="cdr_file" required>
+<form action="/process" method="post" enctype="multipart/form-data">
+    Agent Performance:
+    <input type="file" name="agent_file" required>
 
-        <br><br>
-        <button type="submit">Process Report</button>
-    </form>
+    <br><br>
+
+    CDR:
+    <input type="file" name="cdr_file" required>
+
+    <br><br>
+
+    <button type="submit">Generate Report</button>
+</form>
+
+{% if tables %}
+<hr>
+<h2>Generated Report</h2>
+
+<div style="overflow-x:auto;">
+    {{ tables|safe }}
+</div>
+
+<form action="/export" method="post">
+    <input type="hidden" name="data" value="{{ raw_data }}">
+    <button type="submit">Export Excel</button>
+</form>
+
+{% endif %}
+
 </body>
 </html>
