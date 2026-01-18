@@ -1,176 +1,71 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Agent Performance Dashboard</title>
+<title>Agent Performance</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
 <style>
-body{
-    font-family:Segoe UI,Arial;
-    background:#f3fff7;
-    margin:0;
-}
-header{
-    background:linear-gradient(90deg,#1b8f5a,#26b56f);
-    color:white;
-    padding:16px;
-    text-align:center;
-    font-size:22px;
-    font-weight:bold;
-}
+body{font-family:Segoe UI;background:#f4fff6;margin:0}
+header{background:#1fa463;color:white;padding:15px;font-size:22px;text-align:center}
 
-.cards{
-    display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
-    gap:15px;
-    padding:20px;
-}
-.card{
-    background:white;
-    padding:15px;
-    border-left:6px solid #1fa463;
-    box-shadow:0 2px 6px rgba(0,0,0,.15);
-}
-.card b{color:#555;font-size:14px;}
-.card h3{margin:5px 0;color:#1fa463}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:15px;padding:20px}
 
-.search-box{
-    text-align:center;
-    margin-bottom:10px;
-}
-.search-box input{
-    width:300px;
-    padding:8px;
-    border-radius:6px;
-    border:1px solid #ccc;
-}
+.card{background:white;padding:15px;border-left:6px solid #1fa463;box-shadow:0 2px 6px #ccc}
 
-.table-box{
-    margin:20px;
-    background:white;
-    border-radius:10px;
-    box-shadow:0 2px 8px rgba(0,0,0,.15);
-    overflow:auto;
-    max-height:650px;
-}
+.table-box{padding:20px;overflow:auto;max-height:600px}
 
-table{
-    width:100%;
-    border-collapse:collapse;
-}
-th,td{
-    border:1px solid #ddd;
-    padding:8px;
-    text-align:center;
-    font-size:14px;
-}
-th{
-    background:#1fa463;
-    color:white;
-    position:sticky;
-    top:0;
-    z-index:2;
-}
+table{width:100%;border-collapse:collapse;background:white}
+th,td{border:1px solid #ddd;padding:8px;text-align:center}
+th{background:#1fa463;color:white;position:sticky;top:0}
 
-tr:nth-child(even){background:#f6fff9}
+.btns{text-align:center;margin:20px}
+button{background:#1fa463;color:white;border:none;padding:10px 18px;border-radius:6px;margin:5px}
 
-.btns{
-    text-align:center;
-    margin:20px;
-}
-button{
-    background:#1fa463;
-    color:white;
-    border:none;
-    padding:10px 18px;
-    border-radius:6px;
-    margin:5px;
-    font-size:15px;
-    cursor:pointer;
-}
-button:hover{background:#168a52}
-
-footer{
-    text-align:center;
-    padding:12px;
-    color:#555;
-}
 </style>
 </head>
-
 <body>
 
 <header>Agent Performance Dashboard</header>
 
 <div class="cards">
-<div class="card"><b>TOTAL IVR HIT</b><h3>{{gt["TOTAL IVR HIT"]}}</h3></div>
-<div class="card"><b>TOTAL MATURE</b><h3>{{gt["TOTAL MATURE"]}}</h3></div>
-<div class="card"><b>IB MATURE</b><h3>{{gt["IB MATURE"]}}</h3></div>
-<div class="card"><b>OB MATURE</b><h3>{{gt["OB MATURE"]}}</h3></div>
-<div class="card"><b>TOTAL TALK TIME</b><h3>{{gt["TOTAL TALK"]}}</h3></div>
-<div class="card"><b>AHT (AVG)</b><h3>{{gt["AHT"]}}</h3></div>
-<div class="card"><b>LOGIN COUNT</b><h3>{{gt["LOGIN COUNT"]}}</h3></div>
-</div>
-
-<div class="search-box">
-<input type="text" id="search" placeholder="Search Agent Name or Full Name..." onkeyup="filterTable()">
+<div class="card"><b>Total IVR Hit</b><h3>{{gt["Total IVR Hit"]}}</h3></div>
+<div class="card"><b>Total Mature</b><h3>{{gt["Total Mature"]}}</h3></div>
+<div class="card"><b>IB Mature</b><h3>{{gt["IB Mature"]}}</h3></div>
+<div class="card"><b>OB Mature</b><h3>{{gt["OB Mature"]}}</h3></div>
+<div class="card"><b>Total Talk Time</b><h3>{{gt["Total Talk Time"]}}</h3></div>
+<div class="card"><b>AVG AHT</b><h3>{{gt["AHT"]}}</h3></div>
+<div class="card"><b>Login Count</b><h3>{{gt["Login Count"]}}</h3></div>
 </div>
 
 <div class="table-box" id="tableBox">
-<table id="resultTable">
+<table id="tbl">
 <tr>
-<th>Agent Name</th>
-<th>Agent Full Name</th>
-<th>Total Login Time</th>
-<th>Total Net Login</th>
-<th>Total Break</th>
-<th>Total Meeting</th>
-<th>AHT</th>
-<th>Total Call</th>
-<th>IB Mature</th>
-<th>OB Mature</th>
+{% for k in data[0].keys() %}
+<th>{{k}}</th>
+{% endfor %}
 </tr>
-
 {% for r in data %}
 <tr>
-<td>{{r["Agent Name"]}}</td>
-<td>{{r["Agent Full Name"]}}</td>
-<td>{{r["Total Login Time"]}}</td>
-<td>{{r["Total Net Login"]}}</td>
-<td>{{r["Total Break"]}}</td>
-<td>{{r["Total Meeting"]}}</td>
-<td>{{r["AHT"]}}</td>
-<td>{{r["Total Call"]}}</td>
-<td>{{r["IB Mature"]}}</td>
-<td>{{r["OB Mature"]}}</td>
+{% for v in r.values() %}
+<td>{{v}}</td>
+{% endfor %}
 </tr>
 {% endfor %}
 </table>
 </div>
 
 <div class="btns">
-<button onclick="copyTable()">Copy Table</button>
+<button onclick="copyImg()">Copy Table</button>
 <button onclick="location.href='/export'">Export Excel</button>
 <button onclick="location.href='/'">Reset</button>
 </div>
 
-<footer>Website created by Chandan Malakar</footer>
+<footer style="text-align:center;padding:10px">Website created by Chandan Malakar</footer>
 
 <script>
-function filterTable(){
-    let val=document.getElementById("search").value.toLowerCase();
-    let rows=document.querySelectorAll("#resultTable tr");
-
-    rows.forEach((r,i)=>{
-        if(i==0) return;
-        let txt=r.innerText.toLowerCase();
-        r.style.display=txt.includes(val)?"":"none";
-    })
-}
-
-function copyTable(){
-    html2canvas(document.getElementById("tableBox")).then(canvas=>{
-        canvas.toBlob(b=>{
+function copyImg(){
+    html2canvas(document.getElementById("tableBox")).then(c=>{
+        c.toBlob(b=>{
             navigator.clipboard.write([new ClipboardItem({"image/png":b})]);
             alert("Table copied as image");
         });
