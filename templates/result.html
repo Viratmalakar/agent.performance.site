@@ -1,26 +1,18 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Agent Performance</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-
+<title>Result</title>
 <style>
 body{font-family:Segoe UI;background:#f4fff6;margin:0}
 header{background:#1fa463;color:white;padding:15px;font-size:22px;text-align:center}
-
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:15px;padding:20px}
-
 .card{background:white;padding:15px;border-left:6px solid #1fa463;box-shadow:0 2px 6px #ccc}
-
-.table-box{padding:20px;overflow:auto;max-height:600px}
-
+.table-box{padding:20px;overflow:auto;height:600px}
 table{width:100%;border-collapse:collapse;background:white}
 th,td{border:1px solid #ddd;padding:8px;text-align:center}
-th{background:#1fa463;color:white;position:sticky;top:0}
-
+th{background:#1fa463;color:white}
 .btns{text-align:center;margin:20px}
 button{background:#1fa463;color:white;border:none;padding:10px 18px;border-radius:6px;margin:5px}
-
 </style>
 </head>
 <body>
@@ -37,39 +29,51 @@ button{background:#1fa463;color:white;border:none;padding:10px 18px;border-radiu
 <div class="card"><b>Login Count</b><h3>{{gt["Login Count"]}}</h3></div>
 </div>
 
-<div class="table-box" id="tableBox">
+<div class="table-box">
 <table id="tbl">
 <tr>
-{% for k in data[0].keys() %}
-<th>{{k}}</th>
-{% endfor %}
+<th>Agent Name</th>
+<th>Agent Full Name</th>
+<th>Total Login Time</th>
+<th>Total Net Login</th>
+<th>Total Break</th>
+<th>Total Meeting</th>
+<th>AHT</th>
+<th>Total Call</th>
+<th>IB Mature</th>
+<th>OB Mature</th>
 </tr>
+
 {% for r in data %}
 <tr>
-{% for v in r.values() %}
-<td>{{v}}</td>
-{% endfor %}
+<td>{{r["Agent Name"]}}</td>
+<td>{{r["Agent Full Name"]}}</td>
+<td>{{r["Total Login Time"]}}</td>
+<td>{{r["Total Net Login"]}}</td>
+<td>{{r["Total Break"]}}</td>
+<td>{{r["Total Meeting"]}}</td>
+<td>{{r["AHT"]}}</td>
+<td>{{r["Total Call"]}}</td>
+<td>{{r["IB Mature"]}}</td>
+<td>{{r["OB Mature"]}}</td>
 </tr>
 {% endfor %}
 </table>
 </div>
 
 <div class="btns">
-<button onclick="copyImg()">Copy Table</button>
 <button onclick="location.href='/export'">Export Excel</button>
+<button onclick="copyTable()">Copy Table</button>
 <button onclick="location.href='/'">Reset</button>
 </div>
 
 <footer style="text-align:center;padding:10px">Website created by Chandan Malakar</footer>
 
 <script>
-function copyImg(){
-    html2canvas(document.getElementById("tableBox")).then(c=>{
-        c.toBlob(b=>{
-            navigator.clipboard.write([new ClipboardItem({"image/png":b})]);
-            alert("Table copied as image");
-        });
-    });
+function copyTable(){
+    let t=document.getElementById("tbl").innerText;
+    navigator.clipboard.writeText(t);
+    alert("Table copied!");
 }
 </script>
 
