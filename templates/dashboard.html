@@ -1,89 +1,49 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Agent Performance Dashboard</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<style>
-body{background:#eefaf2;font-family:Segoe UI}
-header{background:#2d6b4f;color:white;padding:15px;font-size:22px;text-align:center}
-.cards{display:grid;grid-template-columns:repeat(7,1fr);gap:15px;padding:20px}
-.card{background:white;padding:15px;border-radius:10px;border-left:6px solid #2d6b4f}
-.card h4{margin:0;font-size:14px;color:#555}
-.card h2{margin:5px 0;color:#2d6b4f}
-
-table{width:95%;margin:auto;border-collapse:collapse;background:white}
-th{background:#2d6b4f;color:white;padding:8px}
-td{border:1px solid #ccc;padding:6px;text-align:center}
-
-.btns{text-align:center;margin:20px}
-button{background:#2d6b4f;color:white;border:none;padding:10px 20px;border-radius:6px;margin:5px}
-</style>
+<title>Dashboard</title>
 </head>
 <body>
 
-<header>Agent Performance Dashboard</header>
+<h2>Agent Dashboard</h2>
 
-<div class="cards">
-<div class="card"><h4>Total IVR Hit</h4><h2 id="ivr"></h2></div>
-<div class="card"><h4>Total Mature</h4><h2 id="mature"></h2></div>
-<div class="card"><h4>IB Mature</h4><h2 id="ib"></h2></div>
-<div class="card"><h4>OB Mature</h4><h2 id="ob"></h2></div>
-<div class="card"><h4>Total Talk Time</h4><h2 id="talk"></h2></div>
-<div class="card"><h4>AVG AHT</h4><h2 id="aht"></h2></div>
-<div class="card"><h4>Login Count</h4><h2 id="login"></h2></div>
-</div>
+<form id="frm" enctype="multipart/form-data">
+    <input type="file" name="agent" required><br><br>
+    <input type="file" name="cdr" required><br><br>
+    <button type="submit">Generate</button>
+</form>
 
-<div id="tableBox"></div>
-
-<div class="btns">
-<button onclick="copyImage()">Copy Table</button>
-<button onclick="exportExcel()">Export Excel</button>
-<button onclick="location.href='/'">Reset</button>
-</div>
+<table border="1" id="tbl"></table>
 
 <script>
-fetch("/process",{method:"POST",body:new FormData()})
-.then(r=>r.json())
-.then(d=>{
-document.getElementById("ivr").innerText=d.cards.ivr;
-document.getElementById("mature").innerText=d.cards.mature;
-document.getElementById("ib").innerText=d.cards.ib;
-document.getElementById("ob").innerText=d.cards.ob;
-document.getElementById("talk").innerText=d.cards.talk;
-document.getElementById("aht").innerText=d.cards.aht;
-document.getElementById("login").innerText=d.cards.login;
+document.getElementById("frm").addEventListener("submit",function(e){
+    e.preventDefault();
 
-let t="<table><tr>";
-Object.keys(d.table[0]).forEach(h=>t+="<th>"+h+"</th>");
-t+="</tr>";
+    let fd = new FormData(this);
 
-d.table.forEach(r=>{
-t+="<tr>";
-Object.values(r).forEach(v=>t+="<td>"+v+"</td>");
-t+="</tr>";
-});
-t+="</table>";
-document.getElementById("tableBox").innerHTML=t;
-});
+    fetch("/process",{
+        method:"POST",
+        body:fd
+    })
+    .then(r=>r.json())
+    .then(data=>{
+        let t=document.getElementById("tbl");
+        t.innerHTML="";
 
-function copyImage(){
-html2canvas(document.getElementById("tableBox")).then(c=>{
-c.toBlob(b=>{
-navigator.clipboard.write([new ClipboardItem({"image/png":b})]);
-alert("Copied!");
-});
-});
-}
+        let h="<tr>";
+        Object.keys(data[0]).forEach(k=>h+="<th>"+k+"</th>");
+        h+="</tr>";
+        t.innerHTML=h;
 
-function exportExcel(){
-fetch("/export",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(window.data)})
-.then(r=>r.blob()).then(b=>{
-let a=document.createElement("a");
-a.href=URL.createObjectURL(b);
-a.download="Agent_Report.xlsx";
-a.click();
+        data.forEach(r=>{
+            let row="<tr>";
+            Object.values(r).forEach(v=>row+="<td>"+v+"</td>");
+            row+="</tr>";
+            t.innerHTML+=row;
+        });
+    });
 });
-}
 </script>
+
 </body>
 </html>
