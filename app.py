@@ -1,13 +1,15 @@
 from flask import Flask, render_template, request, send_file
 import pandas as pd
-import os, tempfile, warnings
-
-warnings.filterwarnings("ignore", category=UserWarning)
+import os, tempfile
 
 app = Flask(__name__)
 
 def clean(df):
     df.columns = df.columns.astype(str).str.strip().str.lower()
+    return df
+
+def fix_time_cells(df):
+    df.replace("-", "00:00:00", inplace=True)
     return df
 
 def find(df, keys):
@@ -16,10 +18,6 @@ def find(df, keys):
             if k in c:
                 return c
     return None
-
-def time_fix(col):
-    col = col.replace("-", "00:00:00")
-    return pd.to_timedelta(col, errors="coerce").fillna(pd.Timedelta(0))
 
 @app.route("/")
 def home():
@@ -33,80 +31,62 @@ def process():
         return "Upload exactly 2 files (Agent Performance + CDR)"
 
     temp = tempfile.mkdtemp()
+    paths = []
 
-    agent_path = os.path.join(temp, files[0].filename)
-    cdr_path   = os.path.join(temp, files[1].filename)
+    for f in files:
+        p = os.path.join(temp, f.filename)
+        f.save(p)
+        paths.append(p)
 
-    files[0].save(agent_path)
-    files[1].save(cdr_path)
+    # ---------- LOAD FILES ----------
+    agent = pd.read_excel(paths[0], header=2)
+    cdr   = pd.read_excel(paths[1], header=1)
 
-    # Agent Performance: header from 3rd row
-    agent = clean(pd.read_excel(agent_path, header=2, engine="openpyxl"))
-    # CDR: header from 2nd row
-    cdr   = clean(pd.read_excel(cdr_path, header=1, engine="openpyxl"))
+    agent = clean(agent)
+    cdr   = clean(cdr)
 
-    # ---- COLUMN MAP ----
-    agent_name = find(agent, ["agent"])
-    login_col  = find(agent, ["total login"])
-    talk_col   = find(agent, ["total talk"])
+    # ---------- FIX DASH ----------
+    agent.iloc[:,1:31] = agent.iloc[:,1:31].astype(str)
+    agent = fix_time_cells(agent)
 
-    lunch = find(agent, ["lunch"])
-    short = find(agent, ["short"])
-    tea   = find(agent, ["tea"])
-    meet  = find(agent, ["meeting"])
-    system= find(agent, ["system"])
+    # ---------- DETECT COLUMNS ----------
+    agent_name_col = find(agent, ["agent name","agent full","name"])
+    login_col = find(agent, ["total login"])
+    meeting_col = find(agent, ["meeting"])
+    break_col = find(agent, ["total break"])
 
-    cdr_user = find(cdr, ["username"])
-    disp_col = find(cdr, ["disposition"])
-    camp_col = find(cdr, ["campaign"])
+    cdr_user_col = find(cdr, ["username","user"])
 
-    if not agent_name or not cdr_user or not disp_col:
-        return "Required columns not found in files."
+    if not agent_name_col or not cdr_user_col:
+        return f"Column missing. Agent:{agent_name_col}, CDR:{cdr_user_col}"
 
-    # ---- TIME FIX ----
-    for c in [login_col,talk_col,lunch,short,tea,meet,system]:
-        if c:
-            agent[c] = time_fix(agent[c])
+    # ---------- CDR COUNT ----------
+    call_count = cdr.groupby(cdr_user_col).size()
 
-    # ---- CALCULATIONS ----
-    agent["total break"] = agent.get(lunch,0) + agent.get(short,0) + agent.get(tea,0)
-    agent["total meeting"] = agent.get(meet,0) + agent.get(system,0)
-
-    agent["total net login"] = agent[login_col] - agent["total break"]
-
-    # ---- CDR CALCULATIONS ----
-    cdr["user"] = cdr[cdr_user].astype(str)
-
-    matured = cdr[disp_col].str.contains("callmatured|transfer", case=False, na=False)
-    total_mature = matured.groupby(cdr["user"]).sum()
-
-    transfer = cdr[disp_col].str.contains("transfer", case=False, na=False)
-    transfer_cnt = transfer.groupby(cdr["user"]).sum()
-
-    inbound = cdr[camp_col].str.contains("csr", case=False, na=False)
-    ib_mature = (matured & inbound).groupby(cdr["user"]).sum()
-
-    # ---- FINAL REPORT ----
+    # ---------- FINAL REPORT ----------
     final = pd.DataFrame()
-    final["EMP ID"] = agent[agent_name]
-    final["Agent Name"] = agent[agent_name]
+    final["Agent Name"] = agent[agent_name_col]
 
-    final["Total Login"] = agent[login_col]
-    final["Total Net Login"] = agent["total net login"]
-    final["Total Break"] = agent["total break"]
-    final["Total Meeting"] = agent["total meeting"]
-    final["Total Talk Time"] = agent[talk_col]
+    if login_col:
+        final["Total Login"] = agent[login_col]
+    else:
+        final["Total Login"] = "00:00:00"
 
-    final["Total Mature"] = final["EMP ID"].map(total_mature).fillna(0).astype(int)
-    final["IB Mature"] = final["EMP ID"].map(ib_mature).fillna(0).astype(int)
-    final["Transfer Call"] = final["EMP ID"].map(transfer_cnt).fillna(0).astype(int)
-    final["OB Mature"] = final["Total Mature"] - final["IB Mature"]
+    if break_col:
+        final["Total Break"] = agent[break_col]
+    else:
+        final["Total Break"] = "00:00:00"
 
-    final["AHT"] = final["Total Talk Time"] / final["Total Mature"].replace(0,1)
+    if meeting_col:
+        final["Total Meeting"] = agent[meeting_col]
+    else:
+        final["Total Meeting"] = "00:00:00"
 
-    # ---- EXPORT ----
-    out = os.path.join(temp,"Agent_Final_Report.xlsx")
-    final.to_excel(out,index=False, engine="openpyxl")
+    final["Total Calls"] = final["Agent Name"].map(call_count).fillna(0).astype(int)
+
+    # ---------- EXPORT ----------
+    out = os.path.join(temp,"Agent_Report.xlsx")
+    final.to_excel(out,index=False)
 
     return send_file(out, as_attachment=True)
 
