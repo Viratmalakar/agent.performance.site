@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, send_file, jsonify
 import pandas as pd
 import io
+from datetime import datetime
 
 app = Flask(__name__)
 
@@ -52,8 +53,11 @@ def process():
     cdr[disp]=cdr[disp].astype(str)
     cdr[camp]=cdr[camp].astype(str)
 
-    mature = cdr[cdr[disp].str.contains("callmatured|transfer",case=False,na=False)]
-    ib = mature[mature[camp].str.contains("csr",case=False,na=False)]
+    # Total Mature
+    mature = cdr[cdr[disp].str.contains("callmature|transfer",case=False,na=False)]
+
+    # IB Mature only CSRINBOUND
+    ib = mature[mature[camp].str.upper()=="CSRINBOUND"]
 
     mature_cnt = mature.groupby(c_emp).size()
     ib_cnt = ib.groupby(c_emp).size()
@@ -97,4 +101,8 @@ def export():
     out=io.BytesIO()
     data.to_excel(out,index=False)
     out.seek(0)
-    return send_file(out,download_name="Final_Report.xlsx",as_attachment=True)
+
+    now=datetime.now().strftime("%d-%m-%y_%H-%M-%S")
+    name=f"Agent_Performance_Report_Chandan-Malakar_{now}.xlsx"
+
+    return send_file(out,download_name=name,as_attachment=True)
