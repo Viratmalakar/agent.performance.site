@@ -2,9 +2,12 @@
 <html>
 <head>
 <title>Agent Performance</title>
+
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
 <style>
 body{
-background:linear-gradient(135deg,#e8fff0,#ffffff);
+background:linear-gradient(135deg,#e6fff1,#ffffff);
 font-family:Segoe UI;
 }
 
@@ -14,15 +17,14 @@ padding:25px;
 border-radius:12px;
 max-width:1200px;
 margin:auto;
-box-shadow:0 10px 30px rgba(22,163,74,0.2);
+box-shadow:0 10px 30px rgba(22,163,74,0.25);
 }
 
-h2{color:#15803d;}
+input{margin:5px;}
 
 button{
 background:linear-gradient(45deg,#16a34a,#22c55e);
-color:white;
-border:none;
+color:white;border:none;
 padding:10px 18px;
 border-radius:20px;
 margin:5px;
@@ -36,39 +38,19 @@ border-collapse:collapse;
 margin-top:20px;
 }
 
-th{
-background:#16a34a;
-color:white;
-padding:10px;
-}
-
-td{
-padding:8px;
-border:1px solid #ddd;
-}
-
+th{background:#16a34a;color:white;padding:10px;}
+td{padding:8px;border:1px solid #ddd;}
 tr:hover{background:#dcfce7;}
 
 #loading{
-position:fixed;
-top:0;
-left:0;
-width:100%;
-height:100%;
-background:rgba(255,255,255,0.95);
-display:none;
-align-items:center;
-justify-content:center;
-font-size:32px;
-color:#16a34a;
-font-weight:bold;
+position:fixed;top:0;left:0;width:100%;height:100%;
+background:white;display:none;
+align-items:center;justify-content:center;
+font-size:32px;color:#16a34a;font-weight:bold;
+z-index:9999;
 }
-footer{
-text-align:center;
-margin-top:20px;
-color:#16a34a;
-font-weight:bold;
-}
+
+footer{text-align:center;margin-top:20px;color:#16a34a;font-weight:bold;}
 </style>
 </head>
 <body>
@@ -78,12 +60,15 @@ font-weight:bold;
 <div class="box">
 <h2>Agent Performance Dashboard</h2>
 
-<input type="file" id="agent">
+<b>Upload Agent Performance Report</b><br>
+<input type="file" id="agent"><br><br>
+
+<b>Upload CDR Report</b><br>
 <input type="file" id="cdr"><br><br>
 
 <button onclick="generate()">Generate</button>
 <button id="exportBtn" onclick="exportExcel()" style="display:none">Export</button>
-<button id="copyBtn" onclick="copyTable()" style="display:none">Copy Table</button>
+<button id="copyBtn" onclick="copyImage()" style="display:none">Copy Table Image</button>
 <button id="resetBtn" onclick="resetAll()" style="display:none">Reset</button>
 
 <div id="table"></div>
@@ -96,7 +81,6 @@ let report=[];
 
 function generate(){
 loading.style.display="flex";
-
 let f=new FormData();
 f.append("agent",agent.files[0]);
 f.append("cdr",cdr.files[0]);
@@ -114,7 +98,7 @@ resetBtn.style.display="inline";
 }
 
 function draw(d){
-let h="<table><tr>";
+let h="<table id='rtable'><tr>";
 Object.keys(d[0]).forEach(k=>h+="<th>"+k+"</th>");
 h+="</tr>";
 d.forEach(r=>{
@@ -132,13 +116,18 @@ fetch("/export",{method:"POST",body:JSON.stringify(report)})
 .then(b=>{
 let a=document.createElement("a");
 a.href=URL.createObjectURL(b);
+a.download="report.xlsx";
 a.click();
 });
 }
 
-function copyTable(){
-navigator.clipboard.writeText(table.innerText);
-alert("Table copied successfully");
+function copyImage(){
+html2canvas(document.getElementById("rtable")).then(canvas=>{
+canvas.toBlob(b=>{
+navigator.clipboard.write([new ClipboardItem({"image/png":b})]);
+alert("Table image copied");
+});
+});
 }
 
 function resetAll(){
