@@ -7,15 +7,15 @@
 <style>
 body{
     font-family:Segoe UI,Arial;
-    background:linear-gradient(135deg,#eafff1,#f6fff9);
+    background:#f3fff7;
     margin:0;
 }
 header{
-    background:linear-gradient(90deg,#1f7f52,#1fa463);
+    background:linear-gradient(90deg,#1b8f5a,#26b56f);
     color:white;
-    padding:15px;
-    font-size:22px;
+    padding:16px;
     text-align:center;
+    font-size:22px;
     font-weight:bold;
 }
 
@@ -25,77 +25,75 @@ header{
     gap:15px;
     padding:20px;
 }
-
 .card{
-    background:rgba(255,255,255,0.85);
-    backdrop-filter:blur(6px);
-    border-radius:12px;
+    background:white;
     padding:15px;
-    box-shadow:0 4px 10px rgba(0,0,0,.1);
     border-left:6px solid #1fa463;
+    box-shadow:0 2px 6px rgba(0,0,0,.15);
 }
+.card b{color:#555;font-size:14px;}
+.card h3{margin:5px 0;color:#1fa463}
 
-.card b{color:#555;font-size:13px}
-.card h3{margin:6px 0;color:#1fa463;font-size:22px}
-
-.box{
-    padding:20px;
+.search-box{
+    text-align:center;
+    margin-bottom:10px;
+}
+.search-box input{
+    width:300px;
+    padding:8px;
+    border-radius:6px;
+    border:1px solid #ccc;
 }
 
 .table-box{
-    background:rgba(255,255,255,0.9);
-    backdrop-filter:blur(5px);
-    border-radius:12px;
-    box-shadow:0 4px 10px rgba(0,0,0,.1);
+    margin:20px;
+    background:white;
+    border-radius:10px;
+    box-shadow:0 2px 8px rgba(0,0,0,.15);
     overflow:auto;
-    max-height:620px;
+    max-height:650px;
 }
 
 table{
     width:100%;
     border-collapse:collapse;
 }
-
 th,td{
-    border:1px solid #dcdcdc;
+    border:1px solid #ddd;
     padding:8px;
     text-align:center;
     font-size:14px;
 }
-
 th{
-    background:#2f7f63;
+    background:#1fa463;
     color:white;
     position:sticky;
     top:0;
     z-index:2;
 }
 
-tr:nth-child(even){background:#f4fff8}
+tr:nth-child(even){background:#f6fff9}
 
 .btns{
     text-align:center;
     margin:20px;
 }
-
 button{
-    background:linear-gradient(90deg,#1f7f52,#1fa463);
+    background:#1fa463;
     color:white;
     border:none;
-    padding:10px 20px;
-    border-radius:8px;
-    margin:6px;
+    padding:10px 18px;
+    border-radius:6px;
+    margin:5px;
     font-size:15px;
     cursor:pointer;
-    box-shadow:0 3px 6px rgba(0,0,0,.15);
 }
-
-button:hover{opacity:.9}
+button:hover{background:#168a52}
 
 footer{
     text-align:center;
     padding:12px;
-    color:#444;
+    color:#555;
 }
 </style>
 </head>
@@ -105,21 +103,21 @@ footer{
 <header>Agent Performance Dashboard</header>
 
 <div class="cards">
-
 <div class="card"><b>TOTAL IVR HIT</b><h3>{{gt["TOTAL IVR HIT"]}}</h3></div>
 <div class="card"><b>TOTAL MATURE</b><h3>{{gt["TOTAL MATURE"]}}</h3></div>
 <div class="card"><b>IB MATURE</b><h3>{{gt["IB MATURE"]}}</h3></div>
 <div class="card"><b>OB MATURE</b><h3>{{gt["OB MATURE"]}}</h3></div>
-<div class="card"><b>TOTAL TALK TIME</b><h3>{{gt["TOTAL TALK TIME"]}}</h3></div>
+<div class="card"><b>TOTAL TALK TIME</b><h3>{{gt["TOTAL TALK"]}}</h3></div>
 <div class="card"><b>AHT (AVG)</b><h3>{{gt["AHT"]}}</h3></div>
 <div class="card"><b>LOGIN COUNT</b><h3>{{gt["LOGIN COUNT"]}}</h3></div>
-
 </div>
 
-<div class="box">
-<div class="table-box" id="tableBox">
-<table>
+<div class="search-box">
+<input type="text" id="search" placeholder="Search Agent Name or Full Name..." onkeyup="filterTable()">
+</div>
 
+<div class="table-box" id="tableBox">
+<table id="resultTable">
 <tr>
 <th>Agent Name</th>
 <th>Agent Full Name</th>
@@ -147,9 +145,7 @@ footer{
 <td>{{r["OB Mature"]}}</td>
 </tr>
 {% endfor %}
-
 </table>
-</div>
 </div>
 
 <div class="btns">
@@ -161,13 +157,24 @@ footer{
 <footer>Website created by Chandan Malakar</footer>
 
 <script>
+function filterTable(){
+    let val=document.getElementById("search").value.toLowerCase();
+    let rows=document.querySelectorAll("#resultTable tr");
+
+    rows.forEach((r,i)=>{
+        if(i==0) return;
+        let txt=r.innerText.toLowerCase();
+        r.style.display=txt.includes(val)?"":"none";
+    })
+}
+
 function copyTable(){
     html2canvas(document.getElementById("tableBox")).then(canvas=>{
-        canvas.toBlob(blob=>{
-            navigator.clipboard.write([new ClipboardItem({"image/png":blob})]);
-            alert("Table copied as image!");
-        })
-    })
+        canvas.toBlob(b=>{
+            navigator.clipboard.write([new ClipboardItem({"image/png":b})]);
+            alert("Table copied as image");
+        });
+    });
 }
 </script>
 
