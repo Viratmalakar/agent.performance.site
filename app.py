@@ -1,17 +1,26 @@
-from flask import Flask,render_template,request,send_file
-import pandas as pd,io,json
+from flask import Flask, render_template, request, jsonify, send_file
+import pandas as pd
+import io, json
 from datetime import datetime
 
-app=Flask(__name__)
+app = Flask(__name__)
+
+def fix_time(x):
+    if pd.isna(x) or str(x).strip().lower() in ["-","nan",""]:
+        return "00:00:00"
+    return str(x)
 
 def tsec(t):
     try:
         h,m,s=map(int,str(t).split(":"))
         return h*3600+m*60+s
-    except: return 0
+    except:
+        return 0
 
 def stime(s):
-    h=s//3600; m=(s%3600)//60; s=s%60
+    h=s//3600
+    m=(s%3600)//60
+    s=s%60
     return f"{h:02d}:{m:02d}:{s:02d}"
 
 @app.route("/")
@@ -50,60 +59,51 @@ def process():
     final=pd.DataFrame()
     final["Agent Name"]=agent[emp]
     final["Agent Full Name"]=agent[full]
-    final["Total Login Time"]=agent[login]
+    final["Total Login Time"]=agent[login].apply(fix_time)
 
     final["Total Break"]=(agent[t].apply(tsec)+agent[w].apply(tsec)+agent[y].apply(tsec)).apply(stime)
     final["Total Meeting"]=(agent[u].apply(tsec)+agent[x].apply(tsec)).apply(stime)
 
     final["Total Net Login"]=(agent[login].apply(tsec)-final["Total Break"].apply(tsec)).apply(stime)
 
+    final["Total Talk Time"]=agent[talk].apply(fix_time)
+
     final["Total Call"]=final["Agent Name"].map(mature_cnt).fillna(0).astype(int)
     final["IB Mature"]=final["Agent Name"].map(ib_cnt).fillna(0).astype(int)
     final["OB Mature"]=final["Total Call"]-final["IB Mature"]
 
-    final["AHT"]=(agent[talk].apply(tsec)/final["Total Call"].replace(0,1)).astype(int).apply(stime)
+    final["AHT"]=(final["Total Talk Time"].apply(tsec)/final["Total Call"].replace(0,1)).astype(int).apply(stime)
 
     final=final[~final["Agent Name"].astype(str).str.lower().isin(["nan","agent name"])]
     final=final.dropna(how="all")
 
-    # ---- GRAND TOTAL ROW ----
-    total={}
-    total["Agent Name"]="TOTAL"
-    total["Agent Full Name"]=""
+    # ===== GRAND TOTAL =====
+    total_ivr=(cdr[camp].str.upper()=="CSRINBOUND").sum()
+    total_mature=final["Total Call"].sum()
+    total_ib=final["IB Mature"].sum()
+    total_ob=final["OB Mature"].sum()
+    total_talk=stime(final["Total Talk Time"].apply(tsec).sum())
+    avg_aht=stime(int(final["AHT"].apply(tsec).mean()))
+    login_count=final["Agent Name"].nunique()
 
-    total["Total Login Time"]=stime(final["Total Login Time"].apply(tsec).sum())
-    total["Total Net Login"]=stime(final["Total Net Login"].apply(tsec).sum())
-    total["Total Break"]=stime(final["Total Break"].apply(tsec).sum())
-    total["Total Meeting"]=stime(final["Total Meeting"].apply(tsec).sum())
+    summary={
+        "TOTAL IVR HIT":int(total_ivr),
+        "TOTAL MATURE":int(total_mature),
+        "IB MATURE":int(total_ib),
+        "OB MATURE":int(total_ob),
+        "TOTAL TALK TIME":total_talk,
+        "AHT":avg_aht,
+        "LOGIN COUNT":int(login_count)
+    }
 
-    total["Total Call"]=int(final["Total Call"].sum())
-    total["IB Mature"]=int(final["IB Mature"].sum())
-    total["OB Mature"]=int(final["OB Mature"].sum())
-
-    total["AHT"]=stime(int(final["AHT"].apply(tsec).mean()))
-
-    ivr_hit=len(cdr[cdr[camp].str.upper()=="CSRINBOUND"])
-
-    total["TOTAL IVR HIT"]=ivr_hit
-    total["TOTAL MATURE"]=int(final["Total Call"].sum())
-    total["TOTAL TALK TIME"]=stime(agent[talk].apply(tsec).sum())
-    total["LOGIN COUNT"]=len(final)
-
-    final=final[[
-    "Agent Name","Agent Full Name","Total Login Time","Total Net Login",
-    "Total Break","Total Meeting","AHT","Total Call","IB Mature","OB Mature"
-    ]]
-
-    final=pd.concat([final,pd.DataFrame([total])])
-
-    return final.to_json(orient="records")
+    return jsonify({"table":final.to_dict(orient="records"),"summary":summary})
 
 @app.route("/export",methods=["POST"])
 def export():
-    data=pd.DataFrame(json.loads(request.data))
+    data=pd.DataFrame(json.loads(request.data.decode()))
     out=io.BytesIO()
     data.to_excel(out,index=False)
     out.seek(0)
-
     now=datetime.now().strftime("%d-%m-%y %H-%M-%S")
-    return send_file(out,download_name=f"Agent_Performance_Report_Chandan-Malakar_{now}.xlsx",as_attachment=True)
+    fname=f"Agent_Performance_Report_Chandan-Malakar_{now}.xlsx"
+    return send_file(out,download_name=fname,as_attachment=True)
