@@ -1,9 +1,10 @@
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, redirect, url_for, session, send_file
 import pandas as pd
 import io, json
 from datetime import datetime
 
 app = Flask(__name__)
+app.secret_key = "agentdashboard"
 
 def fix_time(x):
     if pd.isna(x) or str(x).strip().lower() in ["-","nan",""]:
@@ -24,14 +25,14 @@ def stime(s):
     return f"{h:02d}:{m:02d}:{s:02d}"
 
 @app.route("/")
-def index():
-    return render_template("index.html")
+def upload():
+    return render_template("upload.html")
 
 @app.route("/process",methods=["POST"])
 def process():
 
-    agent=pd.read_excel(request.files["agent"])
-    cdr=pd.read_excel(request.files["cdr"])
+    agent=pd.read_excel(request.files["agent"],engine="openpyxl")
+    cdr=pd.read_excel(request.files["cdr"],engine="openpyxl")
 
     agent.iloc[:,1:31]=agent.iloc[:,1:31].astype(str).replace("-", "00:00:00")
 
@@ -63,47 +64,46 @@ def process():
 
     final["Total Break"]=(agent[t].apply(tsec)+agent[w].apply(tsec)+agent[y].apply(tsec)).apply(stime)
     final["Total Meeting"]=(agent[u].apply(tsec)+agent[x].apply(tsec)).apply(stime)
-
     final["Total Net Login"]=(agent[login].apply(tsec)-final["Total Break"].apply(tsec)).apply(stime)
 
     final["Total Talk Time"]=agent[talk].apply(fix_time)
 
-    final["Total Call"]=final["Agent Name"].map(mature_cnt).fillna(0).astype(int)
+    final["Total Mature"]=final["Agent Name"].map(mature_cnt).fillna(0).astype(int)
     final["IB Mature"]=final["Agent Name"].map(ib_cnt).fillna(0).astype(int)
-    final["OB Mature"]=final["Total Call"]-final["IB Mature"]
+    final["OB Mature"]=final["Total Mature"]-final["IB Mature"]
 
-    final["AHT"]=(final["Total Talk Time"].apply(tsec)/final["Total Call"].replace(0,1)).astype(int).apply(stime)
+    final["AHT"]=(final["Total Talk Time"].apply(tsec)/final["Total Mature"].replace(0,1)).astype(int).apply(stime)
 
-    final=final[~final["Agent Name"].astype(str).str.lower().isin(["nan","agent name"])]
-    final=final.dropna(how="all")
+    final=final.dropna(subset=["Agent Name"])
 
-    # ===== GRAND TOTAL =====
-    total_ivr=(cdr[camp].str.upper()=="CSRINBOUND").sum()
-    total_mature=final["Total Call"].sum()
-    total_ib=final["IB Mature"].sum()
-    total_ob=final["OB Mature"].sum()
-    total_talk=stime(final["Total Talk Time"].apply(tsec).sum())
-    avg_aht=stime(int(final["AHT"].apply(tsec).mean()))
-    login_count=final["Agent Name"].nunique()
+    # ---- GRAND TOTAL ----
+    gt={}
+    gt["Total Talk Time"]=stime(final["Total Talk Time"].apply(tsec).sum())
+    gt["Total Mature"]=int(final["Total Mature"].sum())
+    gt["IB Mature"]=int(final["IB Mature"].sum())
+    gt["OB Mature"]=int(final["OB Mature"].sum())
+    gt["Total IVR Hit"]=int(cdr[cdr[camp].str.upper()=="CSRINBOUND"].shape[0])
+    gt["AHT"]=stime(int(final["Total Talk Time"].apply(tsec).sum()/max(1,gt["Total Mature"])))
 
-    summary={
-        "TOTAL IVR HIT":int(total_ivr),
-        "TOTAL MATURE":int(total_mature),
-        "IB MATURE":int(total_ib),
-        "OB MATURE":int(total_ob),
-        "TOTAL TALK TIME":total_talk,
-        "AHT":avg_aht,
-        "LOGIN COUNT":int(login_count)
-    }
+    session["data"]=final.to_dict(orient="records")
+    session["gt"]=gt
 
-    return jsonify({"table":final.to_dict(orient="records"),"summary":summary})
+    return redirect(url_for("result"))
 
-@app.route("/export",methods=["POST"])
+@app.route("/result")
+def result():
+    return render_template("result.html",
+        data=session.get("data",[]),
+        gt=session.get("gt",{})
+    )
+
+@app.route("/export")
 def export():
-    data=pd.DataFrame(json.loads(request.data.decode()))
+    data=pd.DataFrame(session.get("data",[]))
     out=io.BytesIO()
     data.to_excel(out,index=False)
     out.seek(0)
+
     now=datetime.now().strftime("%d-%m-%y %H-%M-%S")
-    fname=f"Agent_Performance_Report_Chandan-Malakar_{now}.xlsx"
+    fname=f"Agent_Performance_Report_Chandan-Malakar & {now}.xlsx"
     return send_file(out,download_name=fname,as_attachment=True)
