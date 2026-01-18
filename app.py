@@ -1,160 +1,144 @@
-from flask import Flask,render_template,request,jsonify,send_file
+from flask import Flask, render_template, request, jsonify
 import pandas as pd
-import io,datetime
+from datetime import datetime
 
 app = Flask(__name__)
 
 def fix_time(x):
-    if pd.isna(x) or x=="-" or str(x).strip()=="":
+    if pd.isna(x) or x=="-" or x=="nan":
         return "00:00:00"
     return str(x)
 
 def time_to_sec(t):
-    h,m,s = map(int,t.split(":"))
-    return h*3600+m*60+s
+    try:
+        h,m,s = t.split(":")
+        return int(h)*3600+int(m)*60+int(s)
+    except:
+        return 0
 
-def sec_to_time(sec):
-    h=sec//3600
-    m=(sec%3600)//60
-    s=sec%60
-    return f"{h:02d}:{m:02d}:{s:02d}"
-
-def divide_time(t,count):
-    if count==0: return "00:00:00"
-    return sec_to_time(time_to_sec(t)//count)
+def sec_to_time(s):
+    h=s//3600
+    m=(s%3600)//60
+    sec=s%60
+    return f"{h:02}:{m:02}:{sec:02}"
 
 @app.route("/")
-def home():
+def index():
     return render_template("index.html")
 
 @app.route("/process",methods=["POST"])
 def process():
 
-    agent = pd.read_excel(request.files["agent"])
-    cdr   = pd.read_excel(request.files["cdr"])
+    agent = pd.read_excel(request.files["agent"],dtype=str)
+    cdr   = pd.read_excel(request.files["cdr"],dtype=str)
 
-    agent = agent.fillna("")
+    # ---------- CLEAN ----------
+    agent = agent.iloc[2:]     # remove top 2 rows
+    cdr   = cdr.iloc[1:]       # remove top 1 row
 
-    # "-" replace
-    agent.iloc[:,1:31] = agent.iloc[:,1:31].replace("-","00:00:00")
+    agent.fillna("00:00:00",inplace=True)
+    cdr.fillna("",inplace=True)
 
-    agent["EMP"]=agent.iloc[:,1].astype(str)
+    agent.iloc[:,1:31] = agent.iloc[:,1:31].replace("-", "00:00:00")
 
-    # CDR cols
-    cdr["EMP"]=cdr["Username"].astype(str)
-    cdr["Campaign"]=cdr.iloc[:,6].astype(str)
-    cdr["Disposition"]=cdr.iloc[:,25].astype(str)
+    # Column Mapping (as per your logic)
+    EMP_COL = agent.columns[1]      # B column
+    FULLNAME_COL = agent.columns[2]
 
-    final=[]
+    D = agent.columns[3]
+    F = agent.columns[5]
 
-    for emp,grp in agent.groupby("EMP"):
+    T = agent.columns[19]
+    W = agent.columns[22]
+    Y = agent.columns[24]
 
-        row={}
-        row["Agent Name"]=grp.iloc[0,1]
-        row["Agent Full Name"]=grp.iloc[0,2]
+    U = agent.columns[20]
+    X = agent.columns[23]
 
-        login=fix_time(grp.iloc[0,3])
-        talk=fix_time(grp.iloc[0,5])
+    DISP_COL = cdr.columns[25]      # Z
+    CAMP_COL = cdr.columns[6]       # G
+    USER_COL = cdr.columns[2]       # Username
 
-        break_t = fix_time(grp.iloc[0,19])
-        break_w = fix_time(grp.iloc[0,22])
-        break_y = fix_time(grp.iloc[0,24])
+    final = []
 
-        meeting_u = fix_time(grp.iloc[0,20])
-        meeting_x = fix_time(grp.iloc[0,23])
+    # Speed optimization
+    agent_groups = dict(tuple(agent.groupby(EMP_COL)))
+    cdr_groups = dict(tuple(cdr.groupby(USER_COL)))
 
-        total_break = sec_to_time(time_to_sec(break_t)+time_to_sec(break_w)+time_to_sec(break_y))
-        total_meet  = sec_to_time(time_to_sec(meeting_u)+time_to_sec(meeting_x))
-        net_login   = sec_to_time(time_to_sec(login)-time_to_sec(total_break))
+    grand_total_mature = 0
+    grand_total_ivr = 0
+    grand_talk_sec = 0
 
-        sub = cdr[cdr["EMP"]==emp]
+    for emp in agent_groups:
 
-        mature=sub[sub["Disposition"].str.contains("callmatured|transfer",case=False,na=False)]
+        a = agent_groups[emp]
+        c = cdr_groups.get(emp,pd.DataFrame())
 
-        ib=mature[mature["Campaign"].str.upper()=="CSRINBOUND"]
-        ob=len(mature)-len(ib)
+        fullname = a[FULLNAME_COL].iloc[0]
 
-        aht=divide_time(talk,len(mature))
+        total_login = sum(a[D].apply(lambda x: time_to_sec(fix_time(x))))
+        total_break = sum(a[T].apply(lambda x: time_to_sec(fix_time(x)))) + \
+                      sum(a[W].apply(lambda x: time_to_sec(fix_time(x)))) + \
+                      sum(a[Y].apply(lambda x: time_to_sec(fix_time(x))))
 
-        row.update({
-            "Total Login":login,
-            "Total Net Login":net_login,
-            "Total Break":total_break,
-            "Total Meeting":total_meet,
-            "Total Talk Time":talk,
-            "AHT":aht,
-            "Total Mature":len(mature),
-            "IB Mature":len(ib),
-            "OB Mature":ob
-        })
+        total_meeting = sum(a[U].apply(lambda x: time_to_sec(fix_time(x)))) + \
+                        sum(a[X].apply(lambda x: time_to_sec(fix_time(x))))
 
-        final.append(row)
+        net_login = total_login - total_break
 
-    df=pd.DataFrame(final)
+        talk_sec = sum(a[F].apply(lambda x: time_to_sec(fix_time(x))))
 
-    # GRAND TOTAL
-    total_ivr = cdr[cdr["Campaign"].str.upper()=="CSRINBOUND"].shape[0]
+        # -------- Mature Logic ----------
+        mature = c[c[DISP_COL].str.contains("callmature|transfer",case=False,na=False)]
+        total_mature = len(mature)
 
-    total_mature = cdr[cdr["Disposition"].str.contains("callmatured|transfer",case=False,na=False)].shape[0]
+        ib = mature[mature[CAMP_COL].str.contains("CSRINBOUND",case=False,na=False)]
+        ib_mature = len(ib)
 
-    ib_mature = cdr[
-        (cdr["Disposition"].str.contains("callmatured|transfer",case=False,na=False)) &
-        (cdr["Campaign"].str.upper()=="CSRINBOUND")
-    ].shape[0]
+        ob_mature = total_mature - ib_mature
 
-    ob_mature = total_mature - ib_mature
+        # -------- IVR HIT ----------
+        ivr_hit = len(c[c[CAMP_COL].str.contains("CSRINBOUND",case=False,na=False)])
 
-    total_talk = sec_to_time(df["Total Talk Time"].apply(time_to_sec).sum())
-    aht = divide_time(total_talk,total_mature)
+        # -------- AHT ----------
+        if total_mature>0:
+            aht = sec_to_time(int(talk_sec/total_mature))
+        else:
+            aht = "00:00:00"
 
-    grand={
-        "Agent Name":"GRAND TOTAL",
-        "Agent Full Name":"",
-        "Total Login":"",
-        "Total Net Login":"",
-        "Total Break":"",
-        "Total Meeting":"",
-        "Total Talk Time":total_talk,
-        "AHT":aht,
-        "Total Mature":total_mature,
-        "IB Mature":ib_mature,
-        "OB Mature":ob_mature,
-        "Total IVR Hit":total_ivr
-    }
+        grand_total_mature += total_mature
+        grand_total_ivr += ivr_hit
+        grand_talk_sec += talk_sec
 
-    return jsonify({"table":df.to_dict(orient="records"),"grand":grand})
+        final.append([
+            emp, fullname,
+            sec_to_time(total_login),
+            sec_to_time(net_login),
+            sec_to_time(total_break),
+            sec_to_time(total_meeting),
+            sec_to_time(talk_sec),
+            aht,
+            total_mature,
+            ib_mature,
+            ob_mature,
+            ivr_hit
+        ])
 
-@app.route("/export",methods=["POST"])
-def export():
+    # -------- GRAND TOTAL ROW ----------
+    if grand_total_mature>0:
+        grand_aht = sec_to_time(int(grand_talk_sec/grand_total_mature))
+    else:
+        grand_aht="00:00:00"
 
-    data=pd.DataFrame(request.json)
+    final.append([
+        "GRAND TOTAL","",
+        "","","","",
+        sec_to_time(grand_talk_sec),
+        grand_aht,
+        grand_total_mature,
+        "",
+        "",
+        grand_total_ivr
+    ])
 
-    out=io.BytesIO()
-
-    name=datetime.datetime.now().strftime("%d-%m-%y_%H-%M-%S")
-    filename=f"Agent_Performance_Report_Chandan-Malakar_{name}.xlsx"
-
-    with pd.ExcelWriter(out,engine="xlsxwriter") as writer:
-        data.to_excel(writer,index=False,sheet_name="Report")
-
-        wb=writer.book
-        ws=writer.sheets["Report"]
-
-        header=wb.add_format({"bold":True,"border":1,"bg_color":"#1fa463","color":"white","align":"center"})
-        cell=wb.add_format({"border":1,"align":"center"})
-
-        for col in range(len(data.columns)):
-            ws.write(0,col,data.columns[col],header)
-
-        for r in range(1,len(data)+1):
-            for c in range(len(data.columns)):
-                ws.write(r,c,data.iloc[r-1,c],cell)
-
-        ws.autofilter(0,0,len(data),len(data.columns)-1)
-        ws.freeze_panes(1,0)
-
-    out.seek(0)
-    return send_file(out,download_name=filename,as_attachment=True)
-
-if __name__=="__main__":
-    app.run()
+    return jsonify(final)
