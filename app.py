@@ -2,8 +2,6 @@ from flask import Flask, render_template, request, redirect, url_for, session, s
 import pandas as pd
 import io
 from datetime import datetime
-from openpyxl import load_workbook
-from openpyxl.styles import Font, PatternFill, Border, Side
 
 app = Flask(__name__)
 app.secret_key = "agentdashboard"
@@ -70,27 +68,23 @@ def process():
 
     final["Total Talk Time"]=agent[talk].apply(fix_time)
 
-    final["Total Mature"]=final["Agent Name"].map(mature_cnt).fillna(0).astype(int)
+    final["Total Call"]=final["Agent Name"].map(mature_cnt).fillna(0).astype(int)
     final["IB Mature"]=final["Agent Name"].map(ib_cnt).fillna(0).astype(int)
-    final["OB Mature"]=final["Total Mature"]-final["IB Mature"]
+    final["OB Mature"]=final["Total Call"]-final["IB Mature"]
 
-    final["AHT"]=(final["Total Talk Time"].apply(tsec)/final["Total Mature"].replace(0,1)).astype(int).apply(stime)
+    final["AHT"]=(final["Total Talk Time"].apply(tsec)/final["Total Call"].replace(0,1)).astype(int).apply(stime)
 
-    # ❌ REMOVE BAD ROWS PERMANENTLY
-    final = final[~final["Agent Name"].astype(str).str.contains("Agent Name|Total Login|nan",case=False,na=False)]
-    final = final.dropna(subset=["Agent Name"])
+    final=final[final["Agent Name"].notna()]
+    final=final[final["Agent Name"].astype(str).str.lower()!="agent name"]
 
     # ---- GRAND TOTAL ----
     gt={}
-    total_talk_sec = final["Total Talk Time"].apply(tsec).sum()
-    total_mature = final["Total Mature"].sum()
-
     gt["Total IVR Hit"]=int(cdr[cdr[camp].str.upper()=="CSRINBOUND"].shape[0])
-    gt["Total Mature"]=int(total_mature)
+    gt["Total Mature"]=int(final["Total Call"].sum())
     gt["IB Mature"]=int(final["IB Mature"].sum())
     gt["OB Mature"]=int(final["OB Mature"].sum())
-    gt["Total Talk Time"]=stime(total_talk_sec)
-    gt["AHT"]=stime(int(total_talk_sec/max(1,total_mature)))
+    gt["Total Talk Time"]=stime(final["Total Talk Time"].apply(tsec).sum())
+    gt["AHT"]=stime(int(final["Total Talk Time"].apply(tsec).sum()/max(1,gt["Total Mature"])))
     gt["Login Count"]=int(final["Agent Name"].nunique())
 
     session["data"]=final.to_dict(orient="records")
@@ -100,42 +94,15 @@ def process():
 
 @app.route("/result")
 def result():
-    return render_template("result.html",
-        data=session.get("data",[]),
-        gt=session.get("gt",{})
-    )
+    return render_template("result.html",data=session.get("data",[]),gt=session.get("gt",{}))
 
 @app.route("/export")
 def export():
     data=pd.DataFrame(session.get("data",[]))
-
     out=io.BytesIO()
     data.to_excel(out,index=False)
     out.seek(0)
 
-    wb = load_workbook(out)
-    ws = wb.active
-
-    green = PatternFill("solid", fgColor="1FA463")
-    white = Font(color="FFFFFF", bold=True)
-    thin = Border(left=Side(style='thin'), right=Side(style='thin'),
-                  top=Side(style='thin'), bottom=Side(style='thin'))
-
-    # Header format
-    for cell in ws[1]:
-        cell.fill=green
-        cell.font=white
-        cell.border=thin
-
-    # Body border
-    for row in ws.iter_rows(min_row=2):
-        for c in row:
-            c.border=thin
-
-    out2=io.BytesIO()
-    wb.save(out2)
-    out2.seek(0)
-
     now=datetime.now().strftime("%d-%m-%y %H-%M-%S")
     fname=f"Agent_Performance_Report_Chandan-Malakar & {now}.xlsx"
-    return send_file(out2,download_name=fname,as_attachment=True)
+    return send_file(out,download_name=fname,as_attachment=True)
