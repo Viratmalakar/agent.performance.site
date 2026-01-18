@@ -1,6 +1,26 @@
-<h2>Upload 4 Reports</h2>
+<!DOCTYPE html>
+<html>
+<head>
+<title>Upload Reports</title>
+<style>
+body{background:#f4fff6;font-family:Segoe UI;text-align:center}
+.box{background:white;width:420px;margin:120px auto;padding:30px;border-radius:10px;box-shadow:0 2px 8px #ccc}
+h2{color:#1fa463}
+input{margin:10px 0;width:100%}
+button{background:#1fa463;color:white;border:none;padding:10px 20px;border-radius:6px;font-size:16px}
+</style>
+</head>
+<body>
+<div class="box">
+<h2>Upload Reports</h2>
 <form method="post" action="/process" enctype="multipart/form-data">
-<input type="file" name="files" multiple required>
+<p>Agent Performance Report</p>
+<input type="file" name="agent" required>
+<p>CDR Report</p>
+<input type="file" name="cdr" required>
 <br><br>
-<button>Process</button>
+<button>Generate Report</button>
 </form>
+</div>
+</body>
+</html>
