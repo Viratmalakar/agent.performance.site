@@ -1,55 +1,246 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<title>Agent Performance</title>
+<meta charset="UTF-8">
+<title>Agent Performance Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
 <style>
-body{font-family:Arial;background:#f5fff5}
-h2{color:#0b7d3b}
-table{border-collapse:collapse;width:100%}
-th,td{border:1px solid #0b7d3b;padding:6px;text-align:center}
-th{background:#0b7d3b;color:white}
-#loader{display:none;font-size:22px;color:green;text-align:center}
-button{padding:8px 15px;background:#0b7d3b;color:white;border:none;border-radius:5px}
+body{
+    font-family:Segoe UI,Arial;
+    background:#f4fff6;
+    margin:0;
+}
+header{
+    background:#1fa463;
+    color:white;
+    padding:15px 25px;
+    font-size:22px;
+    font-weight:bold;
+}
+.container{
+    padding:25px;
+}
+.card-box{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+    gap:15px;
+    margin-bottom:20px;
+}
+.card{
+    background:white;
+    border-left:6px solid #1fa463;
+    padding:15px;
+    box-shadow:0 2px 6px rgba(0,0,0,0.1);
+}
+.card h4{margin:0;color:#555;font-size:14px;}
+.card h2{margin:5px 0;color:#1fa463}
+
+.upload-box{
+    background:white;
+    padding:20px;
+    border-radius:6px;
+    box-shadow:0 2px 6px rgba(0,0,0,.1);
+    margin-bottom:20px;
+}
+.upload-box label{
+    font-weight:bold;
+    display:block;
+    margin-bottom:5px;
+    color:#1fa463;
+}
+input[type=file]{
+    width:100%;
+    padding:8px;
+}
+
+button{
+    background:#1fa463;
+    color:white;
+    border:none;
+    padding:10px 18px;
+    border-radius:5px;
+    cursor:pointer;
+    margin-right:8px;
+}
+button:hover{background:#168a52}
+
+.table-box{
+    background:white;
+    padding:15px;
+    border-radius:6px;
+    box-shadow:0 2px 6px rgba(0,0,0,.1);
+    overflow:auto;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+}
+th,td{
+    border:1px solid #ddd;
+    padding:8px;
+    text-align:center;
+}
+th{
+    background:#1fa463;
+    color:white;
+}
+
+tfoot td{
+    font-weight:bold;
+    background:#eafff1;
+}
+
+footer{
+    text-align:center;
+    padding:12px;
+    color:#555;
+}
+
+#loader{
+    position:fixed;
+    inset:0;
+    background:rgba(255,255,255,.85);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    font-size:26px;
+    color:#1fa463;
+    font-weight:bold;
+    z-index:999;
+}
 </style>
 </head>
+
 <body>
 
-<h2>Agent Performance Report</h2>
+<header>Agent Performance Dashboard</header>
 
-<form id="form">
-Agent Performance: <input type="file" name="agent" required><br><br>
-CDR Report: <input type="file" name="cdr" required><br><br>
-<button type="submit">Generate</button>
-</form>
+<div id="loader">Generating Report...</div>
 
-<div id="loader">⏳ Generating Report...</div>
+<div class="container">
 
-<table id="table"></table>
+<div class="upload-box">
+    <label>Upload Agent Performance Report</label>
+    <input type="file" id="agentFile">
+
+    <label style="margin-top:15px;">Upload CDR Report</label>
+    <input type="file" id="cdrFile">
+
+    <br><br>
+    <button onclick="generate()">Generate Report</button>
+    <button onclick="exportExcel()" id="exportBtn" style="display:none;">Export Excel</button>
+    <button onclick="copyTableImage()" id="copyBtn" style="display:none;">Copy Table</button>
+    <button onclick="resetAll()" id="resetBtn" style="display:none;">Reset</button>
+</div>
+
+<div class="card-box" id="cards" style="display:none;">
+    <div class="card"><h4>Total Login</h4><h2 id="c_login">0</h2></div>
+    <div class="card"><h4>Total Talk Time</h4><h2 id="c_talk">0</h2></div>
+    <div class="card"><h4>Total Mature</h4><h2 id="c_mature">0</h2></div>
+    <div class="card"><h4>IB Mature</h4><h2 id="c_ib">0</h2></div>
+    <div class="card"><h4>OB Mature</h4><h2 id="c_ob">0</h2></div>
+    <div class="card"><h4>Total IVR Hit</h4><h2 id="c_ivr">0</h2></div>
+</div>
+
+<div class="table-box" id="tableBox" style="display:none;">
+    <table id="resultTable"></table>
+</div>
+
+</div>
+
+<footer>Website created by Chandan Malakar</footer>
 
 <script>
-document.getElementById("form").onsubmit = async function(e){
-e.preventDefault();
-document.getElementById("loader").style.display="block";
+let lastData=[];
 
-let fd=new FormData(this);
+function generate(){
+    let agent=document.getElementById("agentFile").files[0];
+    let cdr=document.getElementById("cdrFile").files[0];
 
-let res = await fetch("/process",{method:"POST",body:fd});
-let data = await res.json();
+    if(!agent||!cdr){
+        alert("Please upload both files");
+        return;
+    }
 
-let html="<tr><th>Agent ID</th><th>Full Name</th><th>Total Login</th><th>Net Login</th><th>Total Break</th><th>Total Meeting</th><th>Total Talk</th><th>AHT</th><th>Total Mature</th><th>IB Mature</th><th>OB Mature</th><th>Total IVR Hit</th></tr>";
+    let fd=new FormData();
+    fd.append("agent",agent);
+    fd.append("cdr",cdr);
 
-for(let r of data){
-html+="<tr>";
-for(let c of r){ html+="<td>"+c+"</td>"; }
-html+="</tr>";
+    document.getElementById("loader").style.display="flex";
+
+    fetch("/process",{method:"POST",body:fd})
+    .then(r=>r.json())
+    .then(data=>{
+        document.getElementById("loader").style.display="none";
+        lastData=data;
+        renderTable(data);
+    })
 }
 
-document.getElementById("table").innerHTML=html;
-document.getElementById("loader").style.display="none";
+function renderTable(data){
+    let table=document.getElementById("resultTable");
+    table.innerHTML="";
+
+    if(data.length==0) return;
+
+    let head="<tr>";
+    Object.keys(data[0]).forEach(k=>{
+        head+="<th>"+k+"</th>";
+    });
+    head+="</tr>";
+    table.innerHTML=head;
+
+    data.forEach(r=>{
+        let row="<tr>";
+        Object.values(r).forEach(v=>{
+            row+="<td>"+v+"</td>";
+        });
+        row+="</tr>";
+        table.innerHTML+=row;
+    });
+
+    document.getElementById("tableBox").style.display="block";
+    document.getElementById("cards").style.display="grid";
+    document.getElementById("exportBtn").style.display="inline-block";
+    document.getElementById("copyBtn").style.display="inline-block";
+    document.getElementById("resetBtn").style.display="inline-block";
+
+    // Top cards from last row total
+    let t=data[data.length-1];
+    document.getElementById("c_login").innerText=t["Total Login"];
+    document.getElementById("c_talk").innerText=t["Total Talk Time"];
+    document.getElementById("c_mature").innerText=t["Total Mature"];
+    document.getElementById("c_ib").innerText=t["IB Mature"];
+    document.getElementById("c_ob").innerText=t["OB Mature"];
+    document.getElementById("c_ivr").innerText=t["Total IVR Hit"];
+}
+
+function exportExcel(){
+    fetch("/export",{method:"POST",body:JSON.stringify(lastData)})
+    .then(r=>r.blob())
+    .then(b=>{
+        let a=document.createElement("a");
+        a.href=URL.createObjectURL(b);
+        a.download="Agent_Performance_Report_"+new Date().toLocaleString().replace(/[:\/]/g,"-")+".xlsx";
+        a.click();
+    })
+}
+
+function copyTableImage(){
+    html2canvas(document.getElementById("tableBox")).then(canvas=>{
+        canvas.toBlob(b=>{
+            navigator.clipboard.write([new ClipboardItem({"image/png":b})]);
+            alert("Table image copied!");
+        });
+    });
+}
+
+function resetAll(){
+    location.reload();
 }
 </script>
-
-<p style="text-align:center;color:green">Website created by Chandan Malakar</p>
 
 </body>
 </html>
