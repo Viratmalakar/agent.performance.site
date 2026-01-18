@@ -1,57 +1,83 @@
 <!DOCTYPE html>
 <html>
 <head>
+<meta charset="UTF-8">
 <title>Agent Performance Dashboard</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
 <style>
 body{font-family:Segoe UI;background:#f4fff6;margin:0}
-header{background:#1fa463;color:white;padding:15px 25px;font-size:22px;font-weight:bold}
-.container{padding:25px}
+header{background:#1fa463;color:white;padding:15px;text-align:center;font-size:22px}
 
-.upload-box,.table-box,.card{
-background:white;padding:20px;border-radius:6px;
-box-shadow:0 2px 6px rgba(0,0,0,.1)
+.container{padding:20px}
+
+.upload-box{
+background:white;padding:20px;border-radius:8px;
+box-shadow:0 2px 6px rgba(0,0,0,.1);
+text-align:center
 }
 
-.upload-box label{font-weight:bold;color:#1fa463}
-input[type=file]{width:100%;padding:8px}
+label{font-weight:bold;color:#1fa463}
+
+input{margin:10px}
 
 button{
 background:#1fa463;color:white;border:none;
-padding:10px 18px;border-radius:5px;
-cursor:pointer;margin-right:8px
+padding:10px 18px;border-radius:6px;margin:6px;cursor:pointer
 }
+
 button:hover{background:#168a52}
 
-.card-box{
+.cards{
 display:grid;
-grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
-gap:15px;margin-bottom:20px
+grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+gap:12px;margin-top:20px
 }
-.card{border-left:6px solid #1fa463}
 
-.table-box{overflow-x:auto}
+.card{
+background:white;
+border-left:5px solid #1fa463;
+padding:12px;
+box-shadow:0 2px 6px rgba(0,0,0,.1)
+}
+
+.card h4{margin:0;color:#555;font-size:14px}
+.card h2{margin:5px 0;color:#1fa463}
+
+.table-box{margin-top:20px;overflow:auto}
 
 table{
 width:100%;
 border-collapse:collapse;
-table-layout:auto;
+background:white
 }
+
 th,td{
 border:1px solid #ddd;
-padding:8px;
-white-space:nowrap;
-text-align:center
+padding:6px;
+text-align:center;
+font-size:13px
 }
-th{background:#1fa463;color:white}
+
+th{
+background:#1fa463;
+color:white;
+position:sticky;
+top:0
+}
 
 footer{text-align:center;padding:12px;color:#555}
 
 #loader{
-position:fixed;inset:0;background:rgba(255,255,255,.9);
-display:none;align-items:center;justify-content:center;
-font-size:26px;color:#1fa463;font-weight:bold;z-index:999
+position:fixed;inset:0;
+background:rgba(255,255,255,.85);
+display:none;
+align-items:center;
+justify-content:center;
+font-size:24px;
+color:#1fa463;
+font-weight:bold;
+z-index:999
 }
 </style>
 </head>
@@ -59,36 +85,39 @@ font-size:26px;color:#1fa463;font-weight:bold;z-index:999
 <body>
 
 <header>Agent Performance Dashboard</header>
+
 <div id="loader">Generating Report...</div>
 
 <div class="container">
 
 <div class="upload-box" id="uploadBox">
-<label>Upload Agent Performance Report</label>
-<input type="file" id="agentFile">
+<label>Upload Agent Performance Report</label><br>
+<input type="file" id="agentFile"><br>
 
-<label style="margin-top:15px;">Upload CDR Report</label>
-<input type="file" id="cdrFile">
+<label>Upload CDR Report</label><br>
+<input type="file" id="cdrFile"><br>
 
-<br><br>
 <button onclick="generate()">Generate Report</button>
 </div>
 
-<div class="card-box" id="cards" style="display:none;">
-<div class="card"><h4>AHT Average</h4><h2 id="c_aht">00:00:00</h2></div>
-<div class="card"><h4>Total Talk Time</h4><h2 id="c_talk">0</h2></div>
-<div class="card"><h4>Total Mature</h4><h2 id="c_mature">0</h2></div>
-<div class="card"><h4>IB Mature</h4><h2 id="c_ib">0</h2></div>
-<div class="card"><h4>OB Mature</h4><h2 id="c_ob">0</h2></div>
-<div class="card"><h4>Total IVR Hit</h4><h2 id="c_ivr">0</h2></div>
+<div class="cards" id="cards" style="display:none">
+<div class="card"><h4>TOTAL IVR HIT</h4><h2 id="c1">0</h2></div>
+<div class="card"><h4>TOTAL MATURE</h4><h2 id="c2">0</h2></div>
+<div class="card"><h4>IB MATURE</h4><h2 id="c3">0</h2></div>
+<div class="card"><h4>OB MATURE</h4><h2 id="c4">0</h2></div>
+<div class="card"><h4>TOTAL TALK TIME</h4><h2 id="c5">0</h2></div>
+<div class="card"><h4>AHT</h4><h2 id="c6">00:00:00</h2></div>
+<div class="card"><h4>LOGIN COUNT</h4><h2 id="c7">0</h2></div>
 </div>
 
-<div class="table-box" id="tableBox" style="display:none;">
-<button onclick="exportExcel()">Export Excel</button>
-<button onclick="copyTableImage()">Copy Table</button>
-<button onclick="resetAll()">Reset</button>
-<br><br>
+<div class="table-box" id="tableBox" style="display:none">
 <table id="resultTable"></table>
+</div>
+
+<div style="text-align:center;margin-top:15px;display:none" id="actions">
+<button onclick="copyTable()">Copy Table</button>
+<button onclick="exportExcel()">Export Excel</button>
+<button onclick="location.reload()">Reset</button>
 </div>
 
 </div>
@@ -97,16 +126,16 @@ font-size:26px;color:#1fa463;font-weight:bold;z-index:999
 
 <script>
 let lastData=[];
-let cardData={};
 
 function generate(){
-let agent=document.getElementById("agentFile").files[0];
-let cdr=document.getElementById("cdrFile").files[0];
-if(!agent||!cdr){alert("Upload both files");return;}
+let a=document.getElementById("agentFile").files[0];
+let c=document.getElementById("cdrFile").files[0];
+
+if(!a||!c){alert("Upload both files");return;}
 
 let fd=new FormData();
-fd.append("agent",agent);
-fd.append("cdr",cdr);
+fd.append("agent",a);
+fd.append("cdr",c);
 
 document.getElementById("loader").style.display="flex";
 
@@ -114,41 +143,43 @@ fetch("/process",{method:"POST",body:fd})
 .then(r=>r.json())
 .then(data=>{
 document.getElementById("loader").style.display="none";
-cardData=data.card;
-renderTable(data.table);
+lastData=data;
+render(data);
 });
 }
 
-function renderTable(data){
+function render(data){
 
 document.getElementById("uploadBox").style.display="none";
 
-lastData=data;
-
-let table=document.getElementById("resultTable");
-table.innerHTML="";
+let t=document.getElementById("resultTable");
+t.innerHTML="";
 
 let head="<tr>";
 Object.keys(data[0]).forEach(k=>head+="<th>"+k+"</th>");
 head+="</tr>";
-table.innerHTML=head;
+t.innerHTML=head;
 
 data.forEach(r=>{
 let row="<tr>";
 Object.values(r).forEach(v=>row+="<td>"+v+"</td>");
 row+="</tr>";
-table.innerHTML+=row;
+t.innerHTML+=row;
 });
 
-document.getElementById("c_aht").innerText=cardData.aht;
-document.getElementById("c_talk").innerText=cardData.talk;
-document.getElementById("c_mature").innerText=cardData.mature;
-document.getElementById("c_ib").innerText=cardData.ib;
-document.getElementById("c_ob").innerText=cardData.ob;
-document.getElementById("c_ivr").innerText=cardData.ivr;
-
-document.getElementById("cards").style.display="grid";
 document.getElementById("tableBox").style.display="block";
+document.getElementById("cards").style.display="grid";
+document.getElementById("actions").style.display="block";
+
+let g=data[data.length-1];
+
+c1.innerText=g["TOTAL IVR HIT"];
+c2.innerText=g["TOTAL MATURE"];
+c3.innerText=g["IB MATURE"];
+c4.innerText=g["OB MATURE"];
+c5.innerText=g["TOTAL TALK TIME"];
+c6.innerText=g["AHT"];
+c7.innerText=g["LOGIN COUNT"];
 }
 
 function exportExcel(){
@@ -162,16 +193,14 @@ a.click();
 });
 }
 
-function copyTableImage(){
+function copyTable(){
 html2canvas(document.getElementById("tableBox")).then(c=>{
 c.toBlob(b=>{
 navigator.clipboard.write([new ClipboardItem({"image/png":b})]);
-alert("Table copied!");
+alert("Table copied as image");
 });
 });
 }
-
-function resetAll(){location.reload();}
 </script>
 
 </body>
