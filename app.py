@@ -6,6 +6,9 @@ from datetime import datetime
 app = Flask(__name__)
 app.secret_key = "agentdashboard"
 
+
+# ---------------- UTILS ----------------
+
 def fix_time(x):
     if pd.isna(x) or str(x).strip().lower() in ["-","nan",""]:
         return "00:00:00"
@@ -24,22 +27,26 @@ def stime(s):
     s=s%60
     return f"{h:02d}:{m:02d}:{s:02d}"
 
+
+# ---------------- ROUTES ----------------
+
 @app.route("/")
 def upload():
     return render_template("upload.html")
 
-@app.route("/process",methods=["POST"])
+
+@app.route("/process", methods=["POST"])
 def process():
 
-    agent = pd.read_excel(request.files["agent"],engine="openpyxl")
-    cdr   = pd.read_excel(request.files["cdr"],engine="openpyxl")
+    agent = pd.read_excel(request.files["agent"], engine="openpyxl")
+    cdr   = pd.read_excel(request.files["cdr"], engine="openpyxl")
 
     agent.iloc[:,1:31] = agent.iloc[:,1:31].astype(str).replace("-", "00:00:00")
 
-    emp  = agent.columns[1]
-    full = agent.columns[2]
-    login= agent.columns[3]
-    talk = agent.columns[5]
+    emp   = agent.columns[1]
+    full  = agent.columns[2]
+    login = agent.columns[3]
+    talk  = agent.columns[5]
 
     t = agent.columns[19]
     u = agent.columns[20]
@@ -62,66 +69,84 @@ def process():
 
     final = pd.DataFrame()
 
-    final["Agent Name"] = agent[emp]
-    final["Agent Full Name"] = agent[full]
+    final["Agent Name"]       = agent[emp]
+    final["Agent Full Name"]  = agent[full]
     final["Total Login Time"] = agent[login].apply(fix_time)
 
-    final["Total Break"] = (agent[t].apply(tsec)+agent[w].apply(tsec)+agent[y].apply(tsec)).apply(stime)
+    final["Total Break"]   = (agent[t].apply(tsec)+agent[w].apply(tsec)+agent[y].apply(tsec)).apply(stime)
     final["Total Meeting"] = (agent[u].apply(tsec)+agent[x].apply(tsec)).apply(stime)
+
     final["Total Net Login"] = (agent[login].apply(tsec)-final["Total Break"].apply(tsec)).apply(stime)
 
     final["Total Talk Time"] = agent[talk].apply(fix_time)
 
     final["Total Call"] = final["Agent Name"].map(mature_cnt).fillna(0).astype(int)
-    final["IB Mature"]  = final["Agent Name"].map(ib_cnt).fillna(0).astype(int)
-    final["OB Mature"]  = final["Total Call"] - final["IB Mature"]
 
-    final["AHT"] = (final["Total Talk Time"].apply(tsec)/final["Total Call"].replace(0,1)).astype(int).apply(stime)
+    final["IB Mature"] = final["Agent Name"].map(ib_cnt).fillna(0).astype(int)
 
-    final = final.dropna(subset=["Agent Name"])
-    final = final[final["Agent Name"].astype(str).str.lower()!="nan"]
+    final["OB Mature"] = final["Total Call"] - final["IB Mature"]
 
-    # -------- GRAND TOTAL ----------
+    final["AHT"] = (final["Total Talk Time"].apply(tsec) / final["Total Call"].replace(0,1)).astype(int).apply(stime)
+
+
+    # ---------------- PERMANENT BAD ROW REMOVAL ----------------
+
+    final = final[final["Agent Name"].notna()]
+
+    final = final[
+        ~final["Agent Name"].astype(str).str.lower().isin([
+            "agent name",
+            "nan",
+            "",
+            "total login time"
+        ])
+    ]
+
+    final = final[
+        ~(
+            (final["Agent Name"].astype(str).str.contains("agent", case=False)) &
+            (final["Agent Full Name"].astype(str).str.contains("agent", case=False))
+        )
+    ]
+
+    final = final.dropna(how="all")
+    final = final.reset_index(drop=True)
+
+    # ---------------- GRAND TOTAL ----------------
+
     gt = {}
 
-    total_talk_sec = final["Total Talk Time"].apply(tsec).sum()
-    total_mature   = int(final["Total Call"].sum())
-    total_ib       = int(final["IB Mature"].sum())
-    total_ob       = int(final["OB Mature"].sum())
-    total_ivr      = int(cdr[cdr[camp].str.upper()=="CSRINBOUND"].shape[0])
-    login_count    = int(final["Agent Name"].nunique())
-
-    gt["TOTAL IVR HIT"]   = total_ivr
-    gt["TOTAL MATURE"]   = total_mature
-    gt["IB MATURE"]      = total_ib
-    gt["OB MATURE"]      = total_ob
-    gt["TOTAL TALK TIME"]= stime(total_talk_sec)
-    gt["AHT"]            = stime(int(total_talk_sec/max(1,total_mature)))
-    gt["LOGIN COUNT"]    = login_count
+    gt["TOTAL IVR HIT"] = int(cdr[cdr[camp].str.upper()=="CSRINBOUND"].shape[0])
+    gt["TOTAL MATURE"]  = int(final["Total Call"].sum())
+    gt["IB MATURE"]     = int(final["IB Mature"].sum())
+    gt["OB MATURE"]     = int(final["OB Mature"].sum())
+    gt["TOTAL TALK"]    = stime(final["Total Talk Time"].apply(tsec).sum())
+    gt["AHT"]           = stime(int(final["Total Talk Time"].apply(tsec).sum()/max(1,gt["TOTAL MATURE"])))
+    gt["LOGIN COUNT"]   = int(final["Agent Name"].nunique())
 
     session["data"] = final.to_dict(orient="records")
     session["gt"]   = gt
 
     return redirect(url_for("result"))
 
+
 @app.route("/result")
 def result():
-    return render_template(
-        "result.html",
+    return render_template("result.html",
         data=session.get("data",[]),
         gt=session.get("gt",{})
     )
 
+
 @app.route("/export")
 def export():
     data = pd.DataFrame(session.get("data",[]))
+
     out = io.BytesIO()
     data.to_excel(out,index=False)
     out.seek(0)
 
     now = datetime.now().strftime("%d-%m-%y %H-%M-%S")
     fname = f"Agent_Performance_Report_Chandan-Malakar & {now}.xlsx"
-    return send_file(out,download_name=fname,as_attachment=True)
 
-if __name__ == "__main__":
-    app.run(debug=True)
+    return send_file(out,download_name=fname,as_attachment=True)
