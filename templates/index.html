@@ -1,7 +1,6 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
 <title>Agent Performance Dashboard</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
@@ -32,10 +31,20 @@ gap:15px;margin-bottom:20px
 }
 .card{border-left:6px solid #1fa463}
 
-table{width:100%;border-collapse:collapse}
-th,td{border:1px solid #ddd;padding:8px;text-align:center}
+.table-box{overflow-x:auto}
+
+table{
+width:100%;
+border-collapse:collapse;
+table-layout:auto;
+}
+th,td{
+border:1px solid #ddd;
+padding:8px;
+white-space:nowrap;
+text-align:center
+}
 th{background:#1fa463;color:white}
-tfoot td{font-weight:bold;background:#eafff1}
 
 footer{text-align:center;padding:12px;color:#555}
 
@@ -88,6 +97,7 @@ font-size:26px;color:#1fa463;font-weight:bold;z-index:999
 
 <script>
 let lastData=[];
+let cardData={};
 
 function generate(){
 let agent=document.getElementById("agentFile").files[0];
@@ -104,8 +114,8 @@ fetch("/process",{method:"POST",body:fd})
 .then(r=>r.json())
 .then(data=>{
 document.getElementById("loader").style.display="none";
-lastData=data;
-renderTable(data);
+cardData=data.card;
+renderTable(data.table);
 });
 }
 
@@ -113,7 +123,7 @@ function renderTable(data){
 
 document.getElementById("uploadBox").style.display="none";
 
-data=data.map(r=>{delete r["Total IVR Hit"];return r});
+lastData=data;
 
 let table=document.getElementById("resultTable");
 table.innerHTML="";
@@ -130,14 +140,12 @@ row+="</tr>";
 table.innerHTML+=row;
 });
 
-let t=data[data.length-1];
-
-document.getElementById("c_aht").innerText=t["AHT"];
-document.getElementById("c_talk").innerText=t["Total Talk Time"];
-document.getElementById("c_mature").innerText=t["Total Mature"];
-document.getElementById("c_ib").innerText=t["IB Mature"];
-document.getElementById("c_ob").innerText=t["OB Mature"];
-document.getElementById("c_ivr").innerText=t["Total IVR Hit"];
+document.getElementById("c_aht").innerText=cardData.aht;
+document.getElementById("c_talk").innerText=cardData.talk;
+document.getElementById("c_mature").innerText=cardData.mature;
+document.getElementById("c_ib").innerText=cardData.ib;
+document.getElementById("c_ob").innerText=cardData.ob;
+document.getElementById("c_ivr").innerText=cardData.ivr;
 
 document.getElementById("cards").style.display="grid";
 document.getElementById("tableBox").style.display="block";
@@ -158,7 +166,7 @@ function copyTableImage(){
 html2canvas(document.getElementById("tableBox")).then(c=>{
 c.toBlob(b=>{
 navigator.clipboard.write([new ClipboardItem({"image/png":b})]);
-alert("Table copied as image!");
+alert("Table copied!");
 });
 });
 }
