@@ -5,7 +5,7 @@ import io
 app = Flask(__name__)
 
 def fix_time(x):
-    if pd.isna(x) or x == "-" or str(x).strip()=="":
+    if pd.isna(x) or str(x).strip() in ["", "-"]:
         return "00:00:00"
     return str(x)
 
@@ -32,63 +32,56 @@ def process():
     agent_file = request.files["agent"]
     cdr_file = request.files["cdr"]
 
+    # ===== READ FILES =====
     agent = pd.read_excel(agent_file, header=2).iloc[:,0:31]
     cdr = pd.read_excel(cdr_file, header=0).iloc[:,0:29]
 
-    agent.columns = agent.columns.str.strip().str.lower()
-    cdr.columns = cdr.columns.str.strip().str.lower()
+    agent.columns = agent.columns.str.strip()
+    cdr.columns = cdr.columns.str.strip()
 
-    agent.rename(columns={
-        "agent name":"employee_id",
-        "agent full name":"agent_full_name",
-        "total login time":"total_login",
-        "total aux time":"total_break",
-        "meeting":"total_meeting",
-        "total talk time":"total_talk",
-        "average call handling time":"aht",
-        "lunchbreak":"lunch",
-        "teabreak":"tea",
-        "shortbreak":"short",
-        "dinnerbreak":"dinner",
-        "systemdown":"systemdown"
-    }, inplace=True)
-
-    cdr.rename(columns={
-        "username":"employee_id",
-        "call type":"call_type",
-        "disposition":"disposition"
-    }, inplace=True)
-
-    for c in ["total_login","total_break","total_meeting","total_talk","aht","lunch","tea","short","dinner","systemdown"]:
-        if c in agent:
-            agent[c] = agent[c].apply(fix_time)
-
-    agent["total_net_login"] = agent.apply(lambda r:
-        to_hms(
-            to_seconds(r.get("total_login")) -
-            (to_seconds(r.get("lunch")) +
-             to_seconds(r.get("tea")) +
-             to_seconds(r.get("short")) +
-             to_seconds(r.get("dinner")) +
-             to_seconds(r.get("systemdown")))
-        ), axis=1)
-
-    mature = cdr[cdr["disposition"].str.contains("mature",case=False,na=False)]
-    ib = mature[mature["call_type"].str.contains("inbound",case=False,na=False)]
-    ob = mature[mature["call_type"].str.contains("outbound",case=False,na=False)]
-
-    final = agent[["employee_id","agent_full_name","total_login","total_net_login","total_break","total_meeting","total_talk","aht"]].copy()
-
-    final["Total Mature"] = final["employee_id"].map(mature.groupby("employee_id").size()).fillna(0).astype(int)
-    final["IB Mature + Transfer call"] = final["employee_id"].map(ib.groupby("employee_id").size()).fillna(0).astype(int)
-    final["OB Mature"] = final["employee_id"].map(ob.groupby("employee_id").size()).fillna(0).astype(int)
-
-    final.columns = [
-        "Agent Name","Agent Full Name","Total Login","Total Net Login",
-        "Total Break","Total Meeting","Total Talk time","AHT",
-        "Total Mature","IB Mature +Transfer call","OB Mature"
+    # ===== FIX TIMES =====
+    time_cols = [
+        "Total Login Time","Total Aux Time","Meeting",
+        "Total Talk Time","Average Call Handling Time",
+        "Lunch Break","Tea Break","Short Break","Dinner Break","System Down"
     ]
 
+    for c in time_cols:
+        if c in agent.columns:
+            agent[c] = agent[c].apply(fix_time)
+
+    # ===== NET LOGIN =====
+    agent["Total Net Login"] = agent.apply(lambda r:
+        to_hms(
+            to_seconds(r["Total Login Time"]) -
+            (to_seconds(r.get("Lunch Break","00:00:00")) +
+             to_seconds(r.get("Tea Break","00:00:00")) +
+             to_seconds(r.get("Short Break","00:00:00")) +
+             to_seconds(r.get("Dinner Break","00:00:00")) +
+             to_seconds(r.get("System Down","00:00:00")))
+        ), axis=1)
+
+    # ===== MATURE FILTER =====
+    mature = cdr[cdr["Disposition"].astype(str).str.contains("mature",case=False,na=False)]
+    ib = mature[mature["Call Type"].astype(str).str.contains("in",case=False,na=False)]
+    ob = mature[mature["Call Type"].astype(str).str.contains("out",case=False,na=False)]
+
+    # ===== FINAL REPORT =====
+    final = pd.DataFrame()
+    final["Agent Name"] = agent["Agent Name"]
+    final["Agent Full Name"] = agent["Agent Full Name"]
+    final["Total Login"] = agent["Total Login Time"]
+    final["Total Net Login"] = agent["Total Net Login"]
+    final["Total Break"] = agent["Total Aux Time"]
+    final["Total Meeting"] = agent["Meeting"]
+    final["Total Talk time"] = agent["Total Talk Time"]
+    final["AHT"] = agent["Average Call Handling Time"]
+
+    final["Total Mature"] = final["Agent Name"].map(mature.groupby("Username").size()).fillna(0).astype(int)
+    final["IB Mature +Transfer call"] = final["Agent Name"].map(ib.groupby("Username").size()).fillna(0).astype(int)
+    final["OB Mature"] = final["Agent Name"].map(ob.groupby("Username").size()).fillna(0).astype(int)
+
+    # ===== EXPORT =====
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         final.to_excel(writer,index=False)
@@ -97,4 +90,4 @@ def process():
     return send_file(output,download_name="Final_Agent_Report.xlsx",as_attachment=True)
 
 if __name__=="__main__":
-    app.run(debug=True)
+    app.run()
