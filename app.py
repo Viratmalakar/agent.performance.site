@@ -8,10 +8,6 @@ def clean(df):
     df.columns = df.columns.astype(str).str.strip().str.lower()
     return df
 
-def fix_time_cells(df):
-    df.replace("-", "00:00:00", inplace=True)
-    return df
-
 def find(df, keys):
     for c in df.columns:
         for k in keys:
@@ -38,24 +34,23 @@ def process():
         f.save(p)
         paths.append(p)
 
-    # ---------- LOAD FILES ----------
-    agent = pd.read_excel(paths[0], header=2)
-    cdr   = pd.read_excel(paths[1], header=1)
+    # ---------- LOAD ----------
+    agent = pd.read_excel(paths[0])
+    cdr   = pd.read_excel(paths[1])
 
     agent = clean(agent)
     cdr   = clean(cdr)
 
     # ---------- FIX DASH ----------
-    agent.iloc[:,1:31] = agent.iloc[:,1:31].astype(str)
-    agent = fix_time_cells(agent)
+    agent.replace("-", "00:00:00", inplace=True)
 
-    # ---------- DETECT COLUMNS ----------
-    agent_name_col = find(agent, ["agent name","agent full","name"])
+    # ---------- DETECT ----------
+    agent_name_col = find(agent, ["agent name","agent full name","agent"])
     login_col = find(agent, ["total login"])
-    meeting_col = find(agent, ["meeting"])
     break_col = find(agent, ["total break"])
+    meeting_col = find(agent, ["meeting"])
 
-    cdr_user_col = find(cdr, ["username","user"])
+    cdr_user_col = find(cdr, ["username","user name","user"])
 
     if not agent_name_col or not cdr_user_col:
         return f"Column missing. Agent:{agent_name_col}, CDR:{cdr_user_col}"
@@ -63,24 +58,13 @@ def process():
     # ---------- CDR COUNT ----------
     call_count = cdr.groupby(cdr_user_col).size()
 
-    # ---------- FINAL REPORT ----------
+    # ---------- FINAL ----------
     final = pd.DataFrame()
     final["Agent Name"] = agent[agent_name_col]
 
-    if login_col:
-        final["Total Login"] = agent[login_col]
-    else:
-        final["Total Login"] = "00:00:00"
-
-    if break_col:
-        final["Total Break"] = agent[break_col]
-    else:
-        final["Total Break"] = "00:00:00"
-
-    if meeting_col:
-        final["Total Meeting"] = agent[meeting_col]
-    else:
-        final["Total Meeting"] = "00:00:00"
+    final["Total Login"] = agent[login_col] if login_col else "00:00:00"
+    final["Total Break"] = agent[break_col] if break_col else "00:00:00"
+    final["Total Meeting"] = agent[meeting_col] if meeting_col else "00:00:00"
 
     final["Total Calls"] = final["Agent Name"].map(call_count).fillna(0).astype(int)
 
