@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, send_file, jsonify
+from flask import Flask, render_template, request, send_file
 import pandas as pd
 import io
 from datetime import datetime
@@ -53,10 +53,7 @@ def process():
     cdr[disp]=cdr[disp].astype(str)
     cdr[camp]=cdr[camp].astype(str)
 
-    # Total Mature
     mature = cdr[cdr[disp].str.contains("callmature|transfer",case=False,na=False)]
-
-    # IB Mature only CSRINBOUND
     ib = mature[mature[camp].str.upper()=="CSRINBOUND"]
 
     mature_cnt = mature.groupby(c_emp).size()
@@ -90,8 +87,10 @@ def process():
         final["Total Mature"].replace(0,1)
     ).astype(int).apply(sec_to_time)
 
-    final=final.dropna(how="all")
-    final=final[final["Agent Name"].astype(str).str.lower()!="nan"]
+    # 🔥 REMOVE UNWANTED HEADER ROW
+    final = final[final["Agent Name"].astype(str).str.lower()!="agent name"]
+
+    final = final.dropna(how="all")
 
     return final.to_json(orient="records")
 
@@ -102,7 +101,7 @@ def export():
     data.to_excel(out,index=False)
     out.seek(0)
 
-    now=datetime.now().strftime("%d-%m-%y_%H-%M-%S")
-    name=f"Agent_Performance_Report_Chandan-Malakar_{now}.xlsx"
+    now=datetime.now().strftime("%d-%m-%y %H:%M:%S")
+    name=f"Agent_Performance_Report_Chandan-Malakar & {now}.xlsx"
 
     return send_file(out,download_name=name,as_attachment=True)
