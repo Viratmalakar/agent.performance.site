@@ -1,26 +1,20 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Agent Performance Tool</title>
-<style>
-body{font-family:Arial;background:#f4f6f9}
-.box{width:420px;margin:80px auto;padding:20px;background:white;border-radius:10px;box-shadow:0 0 10px #aaa}
-input{width:100%;margin:10px 0;padding:8px}
-button{width:100%;padding:10px;background:#007bff;color:white;border:none;border-radius:5px}
-</style>
+    <title>Agent Performance Processor</title>
 </head>
 <body>
-<div class="box">
-<h3 align="center">Agent Performance Report</h3>
-<form method="post" action="/process" enctype="multipart/form-data">
-<label>Agent Performance File</label>
-<input type="file" name="agent" required>
+    <h2>Upload Reports</h2>
 
-<label>CDR File</label>
-<input type="file" name="cdr" required>
+    <form action="/process" method="post" enctype="multipart/form-data">
+        <p>Agent Performance Excel:</p>
+        <input type="file" name="agent_file" required>
 
-<button type="submit">Process & Download</button>
-</form>
-</div>
+        <p>CDR Excel:</p>
+        <input type="file" name="cdr_file" required>
+
+        <br><br>
+        <button type="submit">Process Report</button>
+    </form>
 </body>
 </html>
