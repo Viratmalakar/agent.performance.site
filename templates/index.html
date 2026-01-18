@@ -1,75 +1,26 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Agent Performance Report</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #f4f6f9;
-        }
-        .box {
-            width: 420px;
-            margin: 80px auto;
-            background: white;
-            padding: 25px;
-            border-radius: 10px;
-            box-shadow: 0 0 10px #ccc;
-        }
-        h2 {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        label {
-            font-weight: bold;
-        }
-        input[type=file] {
-            width: 100%;
-            padding: 6px;
-            margin: 8px 0 15px 0;
-        }
-        button {
-            width: 100%;
-            padding: 10px;
-            background: #007bff;
-            border: none;
-            color: white;
-            font-size: 16px;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        button:hover {
-            background: #0056b3;
-        }
-        .note {
-            font-size: 13px;
-            color: #666;
-            margin-top: 10px;
-            text-align: center;
-        }
-    </style>
+<title>Agent Performance Tool</title>
+<style>
+body{font-family:Arial;background:#f4f6f9}
+.box{width:420px;margin:80px auto;padding:20px;background:white;border-radius:10px;box-shadow:0 0 10px #aaa}
+input{width:100%;margin:10px 0;padding:8px}
+button{width:100%;padding:10px;background:#007bff;color:white;border:none;border-radius:5px}
+</style>
 </head>
 <body>
-
 <div class="box">
-    <h2>Agent Performance Report</h2>
+<h3 align="center">Agent Performance Report</h3>
+<form method="post" action="/process" enctype="multipart/form-data">
+<label>Agent Performance File</label>
+<input type="file" name="agent" required>
 
-    <form action="/process" method="post" enctype="multipart/form-data">
+<label>CDR File</label>
+<input type="file" name="cdr" required>
 
-        <label>Upload Agent Performance File</label>
-        <input type="file" name="agent_file" required>
-
-        <label>Upload CDR File</label>
-        <input type="file" name="cdr_file" required>
-
-        <button type="submit">Generate & Download Report</button>
-
-    </form>
-
-    <div class="note">
-        Upload only Excel (.xlsx) files<br>
-        Agent Performance & CDR both required
-    </div>
+<button type="submit">Process & Download</button>
+</form>
 </div>
-
 </body>
 </html>
