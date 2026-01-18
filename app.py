@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, send_file
+from flask import Flask, render_template, request, send_file, jsonify
 import pandas as pd
 import io, json
 from datetime import datetime
@@ -51,7 +51,7 @@ def process():
     mature_cnt=mature.groupby(c_emp).size()
     ib_cnt=ib.groupby(c_emp).size()
 
-    ivr_total=(cdr[cdr[camp].astype(str).str.upper()=="CSRINBOUND"]).shape[0]
+    ivr_total=cdr[cdr[camp].astype(str).str.upper()=="CSRINBOUND"].shape[0]
 
     final=pd.DataFrame()
     final["Agent Name"]=agent[emp]
@@ -70,20 +70,17 @@ def process():
 
     final["AHT"]=(final["Total Talk Time"].apply(tsec)/final["Total Mature"].replace(0,1)).astype(int).apply(stime)
 
-    # Grand Total Row
-    total={}
-    for c in final.columns:
-        if "Time" in c or c=="AHT":
-            total[c]=stime(final[c].apply(tsec).sum())
-        else:
-            total[c]=final[c].sum()
+    # CARD TOTALS
+    card={
+        "talk": stime(final["Total Talk Time"].apply(tsec).sum()),
+        "mature": int(final["Total Mature"].sum()),
+        "ib": int(final["IB Mature"].sum()),
+        "ob": int(final["OB Mature"].sum()),
+        "aht": stime(int(final["AHT"].apply(tsec).mean())),
+        "ivr": int(ivr_total)
+    }
 
-    total["AHT"]=stime(int(final["AHT"].apply(tsec).mean()))
-    total["Total IVR Hit"]=ivr_total
-
-    final=pd.concat([final,pd.DataFrame([total])],ignore_index=True)
-
-    return final.to_json(orient="records")
+    return jsonify({"table":final.to_dict(orient="records"),"card":card})
 
 @app.route("/export",methods=["POST"])
 def export():
