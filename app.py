@@ -1,6 +1,7 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_file
 import pandas as pd
 from datetime import datetime
+import io
 
 app = Flask(__name__)
 
@@ -32,39 +33,39 @@ def process():
     agent = pd.read_excel(request.files["agent"],dtype=str)
     cdr   = pd.read_excel(request.files["cdr"],dtype=str)
 
-    # ---------- CLEAN ----------
-    agent = agent.iloc[2:]     # remove top 2 rows
-    cdr   = cdr.iloc[1:]       # remove top 1 row
+    agent = agent.iloc[2:]
+    cdr   = cdr.iloc[1:]
 
     agent.fillna("00:00:00",inplace=True)
     cdr.fillna("",inplace=True)
 
     agent.iloc[:,1:31] = agent.iloc[:,1:31].replace("-", "00:00:00")
 
-    # Column Mapping (as per your logic)
-    EMP_COL = agent.columns[1]      # B column
+    # AGENT COLUMN MAP
+    EMP_COL = agent.columns[1]
     FULLNAME_COL = agent.columns[2]
-
     D = agent.columns[3]
     F = agent.columns[5]
-
     T = agent.columns[19]
     W = agent.columns[22]
     Y = agent.columns[24]
-
     U = agent.columns[20]
     X = agent.columns[23]
 
-    DISP_COL = cdr.columns[25]      # Z
-    CAMP_COL = cdr.columns[6]       # G
-    USER_COL = cdr.columns[2]       # Username
+    # CDR COLUMN MAP (BY NAME)
+    USER_COL = "Username"
+    CAMP_COL = "Campaign"
+    DISP_COL = "Disposition"
+    DISP_TYPE_COL = "DispositionType"
 
-    final = []
+    for col in [USER_COL, CAMP_COL, DISP_COL, DISP_TYPE_COL]:
+        if col not in cdr.columns:
+            return jsonify({"error":f"Missing column in CDR: {col}"})
 
-    # Speed optimization
     agent_groups = dict(tuple(agent.groupby(EMP_COL)))
     cdr_groups = dict(tuple(cdr.groupby(USER_COL)))
 
+    final = []
     grand_total_mature = 0
     grand_total_ivr = 0
     grand_talk_sec = 0
@@ -85,22 +86,17 @@ def process():
                         sum(a[X].apply(lambda x: time_to_sec(fix_time(x))))
 
         net_login = total_login - total_break
-
         talk_sec = sum(a[F].apply(lambda x: time_to_sec(fix_time(x))))
 
-        # -------- Mature Logic ----------
-        mature = c[c[DISP_COL].str.contains("callmature|transfer",case=False,na=False)]
+        mature = c[c[DISP_TYPE_COL].str.contains("callmature|transfer",case=False,na=False)]
         total_mature = len(mature)
 
         ib = mature[mature[CAMP_COL].str.contains("CSRINBOUND",case=False,na=False)]
         ib_mature = len(ib)
-
         ob_mature = total_mature - ib_mature
 
-        # -------- IVR HIT ----------
         ivr_hit = len(c[c[CAMP_COL].str.contains("CSRINBOUND",case=False,na=False)])
 
-        # -------- AHT ----------
         if total_mature>0:
             aht = sec_to_time(int(talk_sec/total_mature))
         else:
@@ -124,7 +120,6 @@ def process():
             ivr_hit
         ])
 
-    # -------- GRAND TOTAL ROW ----------
     if grand_total_mature>0:
         grand_aht = sec_to_time(int(grand_talk_sec/grand_total_mature))
     else:
@@ -141,4 +136,31 @@ def process():
         grand_total_ivr
     ])
 
-    return jsonify(final)
+    columns = [
+        "Employee ID","Full Name",
+        "Total Login","Net Login","Total Break","Total Meeting",
+        "Total Talk Time","AHT",
+        "Total Mature","IB Mature","OB Mature","Total IVR Hit"
+    ]
+
+    output=[]
+    for row in final:
+        output.append(dict(zip(columns,row)))
+
+    return jsonify(output)
+
+@app.route("/export",methods=["POST"])
+def export():
+    data = request.get_json()
+    df = pd.DataFrame(data)
+
+    output = io.BytesIO()
+    df.to_excel(output,index=False)
+    output.seek(0)
+
+    filename = "Agent_Report_"+datetime.now().strftime("%Y-%m-%d_%H-%M-%S")+".xlsx"
+
+    return send_file(output,as_attachment=True,download_name=filename,mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+if __name__ == "__main__":
+    app.run(debug=True)
