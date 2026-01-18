@@ -1,207 +1,95 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
 <title>Agent Performance Dashboard</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-
 <style>
 body{font-family:Segoe UI;background:#f4fff6;margin:0}
 header{background:#1fa463;color:white;padding:15px;text-align:center;font-size:22px}
-
-.container{padding:20px}
-
-.upload-box{
-background:white;padding:20px;border-radius:8px;
-box-shadow:0 2px 6px rgba(0,0,0,.1);
-text-align:center
-}
-
-label{font-weight:bold;color:#1fa463}
-
-input{margin:10px}
-
-button{
-background:#1fa463;color:white;border:none;
-padding:10px 18px;border-radius:6px;margin:6px;cursor:pointer
-}
-
-button:hover{background:#168a52}
-
-.cards{
-display:grid;
-grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
-gap:12px;margin-top:20px
-}
-
-.card{
-background:white;
-border-left:5px solid #1fa463;
-padding:12px;
-box-shadow:0 2px 6px rgba(0,0,0,.1)
-}
-
-.card h4{margin:0;color:#555;font-size:14px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:15px;padding:20px}
+.card{background:white;padding:15px;border-left:6px solid #1fa463;box-shadow:0 2px 6px rgba(0,0,0,.1)}
+.card h4{margin:0;color:#555}
 .card h2{margin:5px 0;color:#1fa463}
 
-.table-box{margin-top:20px;overflow:auto}
+.table-box{padding:20px}
+table{width:100%;border-collapse:collapse}
+th,td{border:1px solid #ddd;padding:8px;text-align:center}
+th{background:#1fa463;color:white}
 
-table{
-width:100%;
-border-collapse:collapse;
-background:white
-}
-
-th,td{
-border:1px solid #ddd;
-padding:6px;
-text-align:center;
-font-size:13px
-}
-
-th{
-background:#1fa463;
-color:white;
-position:sticky;
-top:0
-}
-
-footer{text-align:center;padding:12px;color:#555}
-
-#loader{
-position:fixed;inset:0;
-background:rgba(255,255,255,.85);
-display:none;
-align-items:center;
-justify-content:center;
-font-size:24px;
-color:#1fa463;
-font-weight:bold;
-z-index:999
-}
+.buttons{text-align:center;margin:15px}
+button{background:#1fa463;color:white;border:none;padding:10px 18px;border-radius:5px;margin:5px}
 </style>
 </head>
 
 <body>
-
 <header>Agent Performance Dashboard</header>
 
-<div id="loader">Generating Report...</div>
+<div class="cards" id="cards"></div>
 
-<div class="container">
-
-<div class="upload-box" id="uploadBox">
-<label>Upload Agent Performance Report</label><br>
-<input type="file" id="agentFile"><br>
-
-<label>Upload CDR Report</label><br>
-<input type="file" id="cdrFile"><br>
-
-<button onclick="generate()">Generate Report</button>
-</div>
-
-<div class="cards" id="cards" style="display:none">
-<div class="card"><h4>TOTAL IVR HIT</h4><h2 id="c1">0</h2></div>
-<div class="card"><h4>TOTAL MATURE</h4><h2 id="c2">0</h2></div>
-<div class="card"><h4>IB MATURE</h4><h2 id="c3">0</h2></div>
-<div class="card"><h4>OB MATURE</h4><h2 id="c4">0</h2></div>
-<div class="card"><h4>TOTAL TALK TIME</h4><h2 id="c5">0</h2></div>
-<div class="card"><h4>AHT</h4><h2 id="c6">00:00:00</h2></div>
-<div class="card"><h4>LOGIN COUNT</h4><h2 id="c7">0</h2></div>
-</div>
-
-<div class="table-box" id="tableBox" style="display:none">
+<div class="table-box">
 <table id="resultTable"></table>
 </div>
 
-<div style="text-align:center;margin-top:15px;display:none" id="actions">
-<button onclick="copyTable()">Copy Table</button>
+<div class="buttons">
+<button onclick="copyTableImage()">Copy Table</button>
 <button onclick="exportExcel()">Export Excel</button>
 <button onclick="location.reload()">Reset</button>
 </div>
 
-</div>
-
-<footer>Website created by Chandan Malakar</footer>
-
 <script>
-let lastData=[];
+let lastTable=[];
 
-function generate(){
-let a=document.getElementById("agentFile").files[0];
-let c=document.getElementById("cdrFile").files[0];
-
-if(!a||!c){alert("Upload both files");return;}
-
-let fd=new FormData();
-fd.append("agent",a);
-fd.append("cdr",c);
-
-document.getElementById("loader").style.display="flex";
-
-fetch("/process",{method:"POST",body:fd})
-.then(r=>r.json())
-.then(data=>{
-document.getElementById("loader").style.display="none";
-lastData=data;
-render(data);
-});
-}
+fetch("/process",{method:"POST",body:new FormData(document.forms[0])})
 
 function render(data){
 
-document.getElementById("uploadBox").style.display="none";
+ let s=data.summary;
 
-let t=document.getElementById("resultTable");
-t.innerHTML="";
+ let order=[
+ "TOTAL IVR HIT","TOTAL MATURE","IB MATURE","OB MATURE",
+ "TOTAL TALK TIME","AHT","LOGIN COUNT"
+ ];
 
-let head="<tr>";
-Object.keys(data[0]).forEach(k=>head+="<th>"+k+"</th>");
-head+="</tr>";
-t.innerHTML=head;
+ let cards="";
+ order.forEach(k=>{
+   cards+=`<div class="card"><h4>${k}</h4><h2>${s[k]}</h2></div>`;
+ });
+ document.getElementById("cards").innerHTML=cards;
 
-data.forEach(r=>{
-let row="<tr>";
-Object.values(r).forEach(v=>row+="<td>"+v+"</td>");
-row+="</tr>";
-t.innerHTML+=row;
-});
+ let table=document.getElementById("resultTable");
+ let head="<tr>";
+ Object.keys(data.table[0]).forEach(k=>head+="<th>"+k+"</th>");
+ head+="</tr>";
+ table.innerHTML=head;
 
-document.getElementById("tableBox").style.display="block";
-document.getElementById("cards").style.display="grid";
-document.getElementById("actions").style.display="block";
+ data.table.forEach(r=>{
+   let row="<tr>";
+   Object.values(r).forEach(v=>row+="<td>"+v+"</td>");
+   row+="</tr>";
+   table.innerHTML+=row;
+ });
 
-let g=data[data.length-1];
-
-c1.innerText=g["TOTAL IVR HIT"];
-c2.innerText=g["TOTAL MATURE"];
-c3.innerText=g["IB MATURE"];
-c4.innerText=g["OB MATURE"];
-c5.innerText=g["TOTAL TALK TIME"];
-c6.innerText=g["AHT"];
-c7.innerText=g["LOGIN COUNT"];
+ lastTable=data.table;
 }
 
 function exportExcel(){
-fetch("/export",{method:"POST",body:JSON.stringify(lastData)})
-.then(r=>r.blob())
-.then(b=>{
-let a=document.createElement("a");
-a.href=URL.createObjectURL(b);
-a.download="Agent_Performance_Report_"+new Date().toLocaleString().replace(/[:\/]/g,"-")+".xlsx";
-a.click();
-});
+ fetch("/export",{method:"POST",body:JSON.stringify(lastTable)})
+ .then(r=>r.blob()).then(b=>{
+  let a=document.createElement("a");
+  a.href=URL.createObjectURL(b);
+  a.download="Agent_Report.xlsx";
+  a.click();
+ })
 }
 
-function copyTable(){
-html2canvas(document.getElementById("tableBox")).then(c=>{
-c.toBlob(b=>{
-navigator.clipboard.write([new ClipboardItem({"image/png":b})]);
-alert("Table copied as image");
-});
-});
+function copyTableImage(){
+ html2canvas(document.querySelector(".table-box")).then(c=>{
+  c.toBlob(b=>{
+   navigator.clipboard.write([new ClipboardItem({"image/png":b})]);
+   alert("Table copied as image");
+  })
+ })
 }
 </script>
-
 </body>
 </html>
