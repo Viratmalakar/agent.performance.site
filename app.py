@@ -1,9 +1,10 @@
-from flask import Flask, render_template, request, send_file, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, send_file
 import pandas as pd
 import io, json
 from datetime import datetime
 
 app = Flask(__name__)
+app.secret_key = "agentdashboard"
 
 def fix_time(x):
     if pd.isna(x) or str(x).strip().lower() in ["-","nan",""]:
@@ -18,18 +19,20 @@ def tsec(t):
         return 0
 
 def stime(s):
-    h=s//3600; m=(s%3600)//60; s=s%60
+    h=s//3600
+    m=(s%3600)//60
+    s=s%60
     return f"{h:02d}:{m:02d}:{s:02d}"
 
 @app.route("/")
-def index():
-    return render_template("index.html")
+def upload():
+    return render_template("upload.html")
 
 @app.route("/process",methods=["POST"])
 def process():
 
-    agent=pd.read_excel(request.files["agent"])
-    cdr=pd.read_excel(request.files["cdr"])
+    agent=pd.read_excel(request.files["agent"],engine="openpyxl")
+    cdr=pd.read_excel(request.files["cdr"],engine="openpyxl")
 
     agent.iloc[:,1:31]=agent.iloc[:,1:31].astype(str).replace("-", "00:00:00")
 
@@ -45,13 +48,14 @@ def process():
     camp=cdr.columns[6]
     disp=cdr.columns[25]
 
-    mature=cdr[cdr[disp].astype(str).str.contains("callmature|transfer",case=False,na=False)]
-    ib=mature[mature[camp].astype(str).str.upper()=="CSRINBOUND"]
+    cdr[disp]=cdr[disp].astype(str)
+    cdr[camp]=cdr[camp].astype(str)
+
+    mature=cdr[cdr[disp].str.contains("callmature|transfer",case=False,na=False)]
+    ib=mature[mature[camp].str.upper()=="CSRINBOUND"]
 
     mature_cnt=mature.groupby(c_emp).size()
     ib_cnt=ib.groupby(c_emp).size()
-
-    ivr_total=cdr[cdr[camp].astype(str).str.upper()=="CSRINBOUND"].shape[0]
 
     final=pd.DataFrame()
     final["Agent Name"]=agent[emp]
@@ -70,26 +74,36 @@ def process():
 
     final["AHT"]=(final["Total Talk Time"].apply(tsec)/final["Total Mature"].replace(0,1)).astype(int).apply(stime)
 
-    # CARD TOTALS
-    card={
-        "talk": stime(final["Total Talk Time"].apply(tsec).sum()),
-        "mature": int(final["Total Mature"].sum()),
-        "ib": int(final["IB Mature"].sum()),
-        "ob": int(final["OB Mature"].sum()),
-        "aht": stime(int(final["AHT"].apply(tsec).mean())),
-        "ivr": int(ivr_total)
-    }
+    final=final.dropna(subset=["Agent Name"])
 
-    return jsonify({"table":final.to_dict(orient="records"),"card":card})
+    # ---- GRAND TOTAL ----
+    gt={}
+    gt["Total Talk Time"]=stime(final["Total Talk Time"].apply(tsec).sum())
+    gt["Total Mature"]=int(final["Total Mature"].sum())
+    gt["IB Mature"]=int(final["IB Mature"].sum())
+    gt["OB Mature"]=int(final["OB Mature"].sum())
+    gt["Total IVR Hit"]=int(cdr[cdr[camp].str.upper()=="CSRINBOUND"].shape[0])
+    gt["AHT"]=stime(int(final["Total Talk Time"].apply(tsec).sum()/max(1,gt["Total Mature"])))
 
-@app.route("/export",methods=["POST"])
+    session["data"]=final.to_dict(orient="records")
+    session["gt"]=gt
+
+    return redirect(url_for("result"))
+
+@app.route("/result")
+def result():
+    return render_template("result.html",
+        data=session.get("data",[]),
+        gt=session.get("gt",{})
+    )
+
+@app.route("/export")
 def export():
-    data=pd.DataFrame(json.loads(request.data.decode()))
+    data=pd.DataFrame(session.get("data",[]))
     out=io.BytesIO()
     data.to_excel(out,index=False)
     out.seek(0)
 
     now=datetime.now().strftime("%d-%m-%y %H-%M-%S")
     fname=f"Agent_Performance_Report_Chandan-Malakar & {now}.xlsx"
-
     return send_file(out,download_name=fname,as_attachment=True)
