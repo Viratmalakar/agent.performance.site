@@ -1,19 +1,8 @@
 from flask import Flask, render_template, request, send_file
 import pandas as pd
 import os, tempfile
-from openpyxl import load_workbook
 
 app = Flask(__name__)
-
-def remove_formatting(input_file, output_file):
-    wb = load_workbook(input_file)
-    ws = wb.active
-
-    for row in ws.iter_rows():
-        for cell in row:
-            cell.style = "Normal"
-
-    wb.save(output_file)
 
 def clean(df):
     df.columns = df.columns.astype(str).str.strip().str.lower()
@@ -33,34 +22,28 @@ def home():
 @app.route("/process", methods=["POST"])
 def process():
 
-    files = request.files.getlist("files")
-    if len(files) != 2:
-        return "Upload exactly 2 files (Agent Performance + CDR)"
+    agent_file = request.files.get("agent_file")
+    cdr_file = request.files.get("cdr_file")
+
+    if not agent_file or not cdr_file:
+        return "Both files required"
 
     temp = tempfile.mkdtemp()
-    paths = []
-    cleaned = []
 
-    # ---------- SAVE ----------
-    for f in files:
-        p = os.path.join(temp, f.filename)
-        f.save(p)
-        paths.append(p)
+    agent_path = os.path.join(temp, agent_file.filename)
+    cdr_path = os.path.join(temp, cdr_file.filename)
 
-    # ---------- REMOVE FORMATTING ----------
-    for p in paths:
-        c = os.path.join(temp, "clean_"+os.path.basename(p))
-        remove_formatting(p, c)
-        cleaned.append(c)
+    agent_file.save(agent_path)
+    cdr_file.save(cdr_path)
 
-    # ---------- LOAD CLEAN ----------
-    agent = pd.read_excel(cleaned[0], dtype=str)
-    cdr   = pd.read_excel(cleaned[1], dtype=str)
+    # ---------- READ ----------
+    agent = pd.read_excel(agent_path, dtype=str)
+    cdr   = pd.read_excel(cdr_path, dtype=str)
 
     agent = clean(agent)
     cdr   = clean(cdr)
 
-    # ---------- FIX DASH ----------
+    # ---------- DASH FIX ----------
     agent.replace("-", "00:00:00", inplace=True)
 
     # ---------- FIND ----------
@@ -82,7 +65,7 @@ def process():
     final["Agent Name"] = agent[agent_name_col]
     final["Total Login"] = agent.get(login_col, "00:00:00")
     final["Total Break"] = agent.get(break_col, "00:00:00")
-    final["Total Meeting"] = agent.get(meeting_col, "00:00:00")
+    final["Meeting"] = agent.get(meeting_col, "00:00:00")
 
     final["Total Calls"] = final["Agent Name"].map(call_count).fillna(0).astype(int)
 
