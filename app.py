@@ -1,11 +1,10 @@
 from flask import Flask, render_template, request, redirect, url_for, session, send_file
 import pandas as pd
-import io
+import io, json
 from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = "agentdashboard"
-
 
 def fix_time(x):
     if pd.isna(x) or str(x).strip().lower() in ["-","nan",""]:
@@ -25,11 +24,9 @@ def stime(s):
     s=s%60
     return f"{h:02d}:{m:02d}:{s:02d}"
 
-
 @app.route("/")
 def upload():
     return render_template("upload.html")
-
 
 @app.route("/process",methods=["POST"])
 def process():
@@ -39,10 +36,10 @@ def process():
 
     agent.iloc[:,1:31] = agent.iloc[:,1:31].astype(str).replace("-", "00:00:00")
 
-    emp   = agent.columns[1]
-    full  = agent.columns[2]
-    login = agent.columns[3]
-    talk  = agent.columns[5]
+    emp  = agent.columns[1]
+    full = agent.columns[2]
+    login= agent.columns[3]
+    talk = agent.columns[5]
 
     t = agent.columns[19]
     u = agent.columns[20]
@@ -79,71 +76,52 @@ def process():
     final["IB Mature"]  = final["Agent Name"].map(ib_cnt).fillna(0).astype(int)
     final["OB Mature"]  = final["Total Call"] - final["IB Mature"]
 
-    final["AHT"] = (
-        final["Total Talk Time"].apply(tsec) /
-        final["Total Call"].replace(0,1)
-    ).astype(int).apply(stime)
+    final["AHT"] = (final["Total Talk Time"].apply(tsec)/final["Total Call"].replace(0,1)).astype(int).apply(stime)
 
     final = final.dropna(subset=["Agent Name"])
+    final = final[final["Agent Name"].astype(str).str.lower()!="nan"]
 
-    # reorder columns
-    final = final[
-        ["Agent Name","Agent Full Name","Total Login Time","Total Net Login",
-         "Total Break","Total Meeting","AHT","Total Call","IB Mature","OB Mature"]
-    ]
+    # -------- GRAND TOTAL ----------
+    gt = {}
 
-    # ---- GRAND TOTAL ----
     total_talk_sec = final["Total Talk Time"].apply(tsec).sum()
-    total_call = int(final["Total Call"].sum())
+    total_mature   = int(final["Total Call"].sum())
+    total_ib       = int(final["IB Mature"].sum())
+    total_ob       = int(final["OB Mature"].sum())
+    total_ivr      = int(cdr[cdr[camp].str.upper()=="CSRINBOUND"].shape[0])
+    login_count    = int(final["Agent Name"].nunique())
 
-    gt = {
-        "TOTAL IVR HIT": int(cdr[cdr[camp].str.upper()=="CSRINBOUND"].shape[0]),
-        "TOTAL MATURE": total_call,
-        "IB MATURE": int(final["IB Mature"].sum()),
-        "OB MATURE": int(final["OB Mature"].sum()),
-        "TOTAL TALK TIME": stime(total_talk_sec),
-        "AHT": stime(int(total_talk_sec/max(1,total_call))),
-        "LOGIN COUNT": int(final["Agent Name"].count())
-    }
+    gt["TOTAL IVR HIT"]   = total_ivr
+    gt["TOTAL MATURE"]   = total_mature
+    gt["IB MATURE"]      = total_ib
+    gt["OB MATURE"]      = total_ob
+    gt["TOTAL TALK TIME"]= stime(total_talk_sec)
+    gt["AHT"]            = stime(int(total_talk_sec/max(1,total_mature)))
+    gt["LOGIN COUNT"]    = login_count
 
     session["data"] = final.to_dict(orient="records")
-    session["gt"] = gt
+    session["gt"]   = gt
 
     return redirect(url_for("result"))
 
-
 @app.route("/result")
 def result():
-    return render_template("result.html",data=session["data"],gt=session["gt"])
-
+    return render_template(
+        "result.html",
+        data=session.get("data",[]),
+        gt=session.get("gt",{})
+    )
 
 @app.route("/export")
 def export():
-
-    data = pd.DataFrame(session["data"])
+    data = pd.DataFrame(session.get("data",[]))
     out = io.BytesIO()
-
-    with pd.ExcelWriter(out,engine="openpyxl") as writer:
-        data.to_excel(writer,index=False,sheet_name="Report")
-        ws = writer.sheets["Report"]
-
-        from openpyxl.styles import PatternFill,Font,Border,Side
-
-        header_fill = PatternFill(start_color="4F8F6A",end_color="4F8F6A",fill_type="solid")
-        header_font = Font(color="FFFFFF",bold=True)
-        border = Border(left=Side(style="thin"),right=Side(style="thin"),
-                        top=Side(style="thin"),bottom=Side(style="thin"))
-
-        for cell in ws[1]:
-            cell.fill = header_fill
-            cell.font = header_font
-            cell.border = border
-
-        for row in ws.iter_rows(min_row=2):
-            for cell in row:
-                cell.border = border
-
+    data.to_excel(out,index=False)
     out.seek(0)
 
-    fname="Agent_Performance_Report_"+datetime.now().strftime("%d-%m-%y_%H-%M-%S")+".xlsx"
+    now = datetime.now().strftime("%d-%m-%y %H-%M-%S")
+    fname = f"Agent_Performance_Report_Chandan-Malakar & {now}.xlsx"
     return send_file(out,download_name=fname,as_attachment=True)
+
+if __name__ == "__main__":
+    app.run(debug=True)
