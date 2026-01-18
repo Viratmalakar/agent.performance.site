@@ -1,5 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Agent Performance Report</title>
+</head>
+<body>
+
+<h2>Upload Files</h2>
+
 <form action="/process" method="post" enctype="multipart/form-data">
-    <input type="file" name="files" multiple required>
-    <br><br>
+
+    <label>Agent Performance Excel:</label><br>
+    <input type="file" name="agent_file" required><br><br>
+
+    <label>CDR Excel:</label><br>
+    <input type="file" name="cdr_file" required><br><br>
+
     <button type="submit">Process</button>
+
 </form>
+
+</body>
+</html>
