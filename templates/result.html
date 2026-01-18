@@ -1,8 +1,56 @@
-<h2>Agent Performance Report</h2>
+<!DOCTYPE html>
+<html>
+<head>
+<title>Result</title>
+<style>
+body{font-family:Segoe UI;background:#f4fff6;margin:0}
+header{background:#1fa463;color:white;padding:15px;font-size:22px;text-align:center}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:15px;padding:20px}
+.card{background:white;padding:15px;border-left:6px solid #1fa463;box-shadow:0 2px 6px #ccc}
+table{width:100%;border-collapse:collapse;background:white}
+th,td{border:1px solid #ddd;padding:8px;text-align:center}
+th{background:#1fa463;color:white}
+.box{padding:20px}
+.btns{text-align:center;margin:20px}
+button{background:#1fa463;color:white;border:none;padding:10px 18px;border-radius:6px;margin:5px}
+</style>
+</head>
+<body>
 
-{{ tables|safe }}
+<header>Agent Performance Dashboard</header>
 
-<br><br>
-<a href="/download">
-<button>Download Excel</button>
-</a>
+<div class="cards">
+<div class="card"><b>Total Talk</b><h3>{{gt["Total Talk Time"]}}</h3></div>
+<div class="card"><b>Total Mature</b><h3>{{gt["Total Mature"]}}</h3></div>
+<div class="card"><b>IB Mature</b><h3>{{gt["IB Mature"]}}</h3></div>
+<div class="card"><b>OB Mature</b><h3>{{gt["OB Mature"]}}</h3></div>
+<div class="card"><b>Total IVR Hit</b><h3>{{gt["Total IVR Hit"]}}</h3></div>
+<div class="card"><b>AVG AHT</b><h3>{{gt["AHT"]}}</h3></div>
+</div>
+
+<div class="box">
+<table>
+<tr>
+{% for k in data[0].keys() %}
+<th>{{k}}</th>
+{% endfor %}
+</tr>
+{% for r in data %}
+<tr>
+{% for v in r.values() %}
+<td>{{v}}</td>
+{% endfor %}
+</tr>
+{% endfor %}
+</table>
+</div>
+
+<div class="btns">
+<button onclick="location.href='/export'">Export Excel</button>
+<button onclick="location.href='/'">Reset</button>
+</div>
+
+<footer style="text-align:center;padding:10px">Website created by Chandan Malakar</footer>
+
+</body>
+</html>
