@@ -1,20 +1,17 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Dashboard</title>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-
+<title>Agent Performance</title>
 <style>
 body{font-family:Segoe UI;background:#f4fff6;margin:0}
 header{background:#1fa463;color:white;padding:15px;font-size:22px;text-align:center}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:15px;padding:20px}
 .card{background:white;padding:15px;border-left:6px solid #1fa463;box-shadow:0 2px 6px #ccc}
-.box{padding:20px}
 table{width:100%;border-collapse:collapse;background:white}
 th,td{border:1px solid #ddd;padding:8px;text-align:center}
 th{background:#1fa463;color:white}
-input{padding:8px;width:260px;margin-bottom:10px}
+.box{padding:20px;max-height:650px;overflow:auto}
+.btns{text-align:center;margin:20px}
 button{background:#1fa463;color:white;border:none;padding:10px 18px;border-radius:6px;margin:5px}
 </style>
 </head>
@@ -33,76 +30,28 @@ button{background:#1fa463;color:white;border:none;padding:10px 18px;border-radiu
 </div>
 
 <div class="box">
-
-<input type="text" id="search" placeholder="Search Agent Full Name" onkeyup="filterTable()">
-
-<div style="overflow:auto;max-height:520px">
-<table id="tbl">
+<table>
 <tr>
-<th>Agent Name</th>
-<th>Agent Full Name</th>
-<th>Total Login Time</th>
-<th>Total Net Login</th>
-<th>Total Break</th>
-<th>Total Meeting</th>
-<th>AHT</th>
-<th>Total Call</th>
-<th>IB Mature</th>
-<th>OB Mature</th>
+{% for k in data[0].keys() %}
+<th>{{k}}</th>
+{% endfor %}
 </tr>
-
 {% for r in data %}
 <tr>
-<td>{{r["Agent Name"]}}</td>
-<td>{{r["Agent Full Name"]}}</td>
-<td>{{r["Total Login Time"]}}</td>
-<td>{{r["Total Net Login"]}}</td>
-<td>{{r["Total Break"]}}</td>
-<td>{{r["Total Meeting"]}}</td>
-<td>{{r["AHT"]}}</td>
-<td>{{r["Total Call"]}}</td>
-<td>{{r["IB Mature"]}}</td>
-<td>{{r["OB Mature"]}}</td>
+{% for v in r.values() %}
+<td>{{v}}</td>
+{% endfor %}
 </tr>
 {% endfor %}
 </table>
 </div>
-</div>
 
-<div style="text-align:center">
-<button onclick="copyFullTable()">Copy Table</button>
+<div class="btns">
 <button onclick="location.href='/export'">Export Excel</button>
 <button onclick="location.href='/'">Reset</button>
 </div>
 
 <footer style="text-align:center;padding:10px">Website created by Chandan Malakar</footer>
-
-<script>
-function filterTable(){
-  let v=document.getElementById("search").value.toUpperCase();
-  let tr=document.querySelectorAll("#tbl tr");
-  for(let i=1;i<tr.length;i++){
-    let td=tr[i].getElementsByTagName("td")[1];
-    tr[i].style.display=td && td.innerText.toUpperCase().includes(v)?"":"none";
-  }
-}
-
-function copyFullTable(){
-    let table=document.getElementById("tbl");
-
-    html2canvas(table,{
-        scrollY:-window.scrollY,
-        backgroundColor:"#ffffff"
-    }).then(canvas=>{
-        canvas.toBlob(function(blob){
-            navigator.clipboard.write([
-                new ClipboardItem({"image/png":blob})
-            ]);
-            alert("Full table image copied!");
-        });
-    });
-}
-</script>
 
 </body>
 </html>
