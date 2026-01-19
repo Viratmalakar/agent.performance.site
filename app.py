@@ -4,8 +4,9 @@ import io
 from datetime import datetime
 
 app = Flask(__name__)
-app.secret_key="agentdashboard"
+app.secret_key = "agentdashboard"
 
+# ---------------- HELPERS ----------------
 def fix_time(x):
     if pd.isna(x) or str(x).strip().lower() in ["-","nan",""]:
         return "00:00:00"
@@ -24,6 +25,7 @@ def stime(s):
     s=s%60
     return f"{h:02d}:{m:02d}:{s:02d}"
 
+# ---------------- ROUTES ----------------
 @app.route("/")
 def upload():
     return render_template("upload.html")
@@ -74,9 +76,34 @@ def process():
 
     final["AHT"]=(final["Total Talk Time"].apply(tsec)/final["Total Call"].replace(0,1)).astype(int).apply(stime)
 
-    final=final.dropna(subset=["Agent Name"])
+    # -------- PERMANENT BAD ROW REMOVAL --------
+    final = final[final["Agent Name"].notna()]
+    final = final[final["Agent Full Name"].notna()]
 
-    # GRAND TOTAL
+    final = final[~final["Agent Name"].astype(str).str.lower().isin(
+        ["nan","agent name","aht"]
+    )]
+
+    final = final[~(
+        (final["Agent Name"].astype(str).str.strip()=="") &
+        (final["Agent Full Name"].astype(str).str.strip()=="")
+    )]
+
+    # -------- COLUMN ORDER --------
+    final = final[[
+        "Agent Name",
+        "Agent Full Name",
+        "Total Login Time",
+        "Total Net Login",
+        "Total Break",
+        "Total Meeting",
+        "AHT",
+        "Total Call",
+        "IB Mature",
+        "OB Mature"
+    ]]
+
+    # -------- GRAND TOTAL --------
     gt={}
     gt["TOTAL IVR HIT"]=int(cdr[cdr[camp].str.upper()=="CSRINBOUND"].shape[0])
     gt["TOTAL MATURE"]=int(final["Total Call"].sum())
@@ -84,7 +111,7 @@ def process():
     gt["OB MATURE"]=int(final["OB Mature"].sum())
     gt["TOTAL TALK TIME"]=stime(final["Total Talk Time"].apply(tsec).sum())
     gt["AHT"]=stime(int(final["Total Talk Time"].apply(tsec).sum()/max(1,gt["TOTAL MATURE"])))
-    gt["LOGIN COUNT"]=int(final["Agent Name"].nunique())
+    gt["LOGIN COUNT"]=int(final["Agent Name"].count())
 
     session["data"]=final.to_dict(orient="records")
     session["gt"]=gt
@@ -93,40 +120,39 @@ def process():
 
 @app.route("/result")
 def result():
-    return render_template("result.html",
-        data=session.get("data",[]),
-        gt=session.get("gt",{})
-    )
+    return render_template("result.html",data=session["data"],gt=session["gt"])
 
 @app.route("/export")
 def export():
-    data=pd.DataFrame(session.get("data",[]))
+
+    data=pd.DataFrame(session["data"])
 
     out=io.BytesIO()
-
-    with pd.ExcelWriter(out,engine="openpyxl") as writer:
+    with pd.ExcelWriter(out,engine="xlsxwriter") as writer:
         data.to_excel(writer,index=False,sheet_name="Report")
 
+        wb=writer.book
         ws=writer.sheets["Report"]
 
-        from openpyxl.styles import PatternFill, Font, Border, Side
+        header=wb.add_format({
+            "bold":True,
+            "bg_color":"#1fa463",
+            "color":"white",
+            "border":1,
+            "align":"center"
+        })
 
-        header_fill=PatternFill(start_color="1FA463",end_color="1FA463",fill_type="solid")
-        header_font=Font(color="FFFFFF",bold=True)
-        border=Border(left=Side(style="thin"),right=Side(style="thin"),
-                      top=Side(style="thin"),bottom=Side(style="thin"))
+        cell=wb.add_format({
+            "border":1,
+            "align":"center"
+        })
 
-        for cell in ws[1]:
-            cell.fill=header_fill
-            cell.font=header_font
-            cell.border=border
+        for col in range(len(data.columns)):
+            ws.write(0,col,data.columns[col],header)
+            ws.set_column(col,col,22)
 
-        for row in ws.iter_rows(min_row=2):
-            for c in row:
-                c.border=border
-
-        for col in ws.columns:
-            ws.column_dimensions[col[0].column_letter].width=20
+        for r in range(1,len(data)+1):
+            ws.set_row(r,None,cell)
 
     out.seek(0)
 
