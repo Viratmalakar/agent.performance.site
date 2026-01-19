@@ -3,24 +3,62 @@
 <head>
 <title>Upload Reports</title>
 <style>
-body{background:#f4fff6;font-family:Segoe UI;text-align:center}
-.box{background:white;width:420px;margin:120px auto;padding:30px;border-radius:10px;box-shadow:0 2px 8px #ccc}
-h2{color:#1fa463}
-input{margin:10px 0;width:100%}
-button{background:#1fa463;color:white;border:none;padding:10px 20px;border-radius:6px;font-size:16px}
+body{
+    background:linear-gradient(135deg,#eafff1,#ffffff);
+    font-family:Segoe UI;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    height:100vh;
+}
+.box{
+    background:white;
+    width:420px;
+    padding:35px;
+    border-radius:14px;
+    box-shadow:0 10px 30px rgba(0,0,0,.15);
+    text-align:center;
+}
+h2{
+    color:#1fa463;
+    margin-bottom:20px;
+}
+input{
+    width:100%;
+    padding:10px;
+    margin:10px 0;
+    border-radius:6px;
+    border:1px solid #ccc;
+}
+button{
+    background:linear-gradient(45deg,#1fa463,#28c07c);
+    color:white;
+    border:none;
+    padding:12px 30px;
+    border-radius:25px;
+    font-size:16px;
+    cursor:pointer;
+    margin-top:15px;
+}
+button:hover{opacity:.9}
+small{color:#777}
 </style>
 </head>
 <body>
+
 <div class="box">
-<h2>Upload Reports</h2>
+<h2>Agent Performance Dashboard</h2>
+
 <form method="post" action="/process" enctype="multipart/form-data">
-<p>Agent Performance Report</p>
+<small>Agent Performance Report</small>
 <input type="file" name="agent" required>
-<p>CDR Report</p>
+
+<small>CDR Report</small>
 <input type="file" name="cdr" required>
-<br><br>
-<button>Generate Report</button>
+
+<button>Generate Live Report</button>
 </form>
+
 </div>
 </body>
 </html>
