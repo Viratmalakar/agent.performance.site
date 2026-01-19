@@ -1,125 +1,41 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Dashboard</title>
+<title>Result</title>
 <style>
-body{margin:0;font-family:Segoe UI;background:#f4fff6}
-header{
-    background:linear-gradient(45deg,#1fa463,#28c07c);
-    color:white;
-    padding:18px;
-    font-size:24px;
-    text-align:center;
-    position:sticky;
-    top:0;
-    z-index:99;
-}
-
-.cards{
-    display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
-    gap:15px;
-    padding:20px;
-}
-
-.card{
-    background:white;
-    padding:15px;
-    border-radius:12px;
-    box-shadow:0 5px 15px rgba(0,0,0,.1);
-    border-left:6px solid #1fa463;
-}
-.card h4{margin:0;color:#555}
-.card h2{margin:6px 0;color:#1fa463}
-
-.box{padding:20px}
-
-.search{
-    width:300px;
-    padding:10px;
-    border-radius:20px;
-    border:1px solid #ccc;
-    margin-bottom:15px;
-}
-
-.table-wrap{
-    max-height:650px;
-    overflow:auto;
-    border-radius:12px;
-    box-shadow:0 5px 15px rgba(0,0,0,.1);
-}
-
-table{
-    width:100%;
-    border-collapse:collapse;
-    background:white;
-}
-th,td{
-    padding:10px;
-    border:1px solid #ddd;
-    text-align:center;
-}
-th{
-    background:#1fa463;
-    color:white;
-    position:sticky;
-    top:0;
-}
-
-tr:hover{background:#eafff1}
-
+body{font-family:Segoe UI;background:#f4fff6;margin:0}
+header{background:#1fa463;color:white;padding:15px;font-size:22px;text-align:center}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:15px;padding:20px}
+.card{background:white;padding:15px;border-left:6px solid #1fa463;box-shadow:0 2px 6px #ccc}
+table{width:100%;border-collapse:collapse;background:white}
+th,td{border:1px solid #ddd;padding:8px;text-align:center}
+th{background:#1fa463;color:white;position:sticky;top:0}
+.box{padding:20px;max-height:600px;overflow:auto}
 .btns{text-align:center;margin:20px}
-button{
-    background:linear-gradient(45deg,#1fa463,#28c07c);
-    color:white;
-    border:none;
-    padding:10px 22px;
-    border-radius:25px;
-    margin:5px;
-    cursor:pointer;
-}
-
-footer{text-align:center;padding:12px;color:#555}
+button{background:#1fa463;color:white;border:none;padding:10px 18px;border-radius:6px;margin:5px}
 </style>
-
-<script>
-function searchTable(){
-    let v=document.getElementById("search").value.toLowerCase();
-    document.querySelectorAll("tbody tr").forEach(r=>{
-        r.style.display=r.innerText.toLowerCase().includes(v)?"":"none";
-    });
-}
-</script>
-
 </head>
 <body>
 
-<header>Agent Performance Live Dashboard</header>
+<header>Agent Performance Dashboard</header>
 
 <div class="cards">
-<div class="card"><h4>Total IVR Hit</h4><h2>{{gt["TOTAL IVR HIT"]}}</h2></div>
-<div class="card"><h4>Total Mature</h4><h2>{{gt["TOTAL MATURE"]}}</h2></div>
-<div class="card"><h4>IB Mature</h4><h2>{{gt["IB MATURE"]}}</h2></div>
-<div class="card"><h4>OB Mature</h4><h2>{{gt["OB MATURE"]}}</h2></div>
-<div class="card"><h4>Total Talk Time</h4><h2>{{gt["TOTAL TALK TIME"]}}</h2></div>
-<div class="card"><h4>AVG AHT</h4><h2>{{gt["AHT"]}}</h2></div>
-<div class="card"><h4>Login Count</h4><h2>{{gt["LOGIN COUNT"]}}</h2></div>
+<div class="card"><b>TOTAL IVR HIT</b><h3>{{gt["TOTAL IVR HIT"]}}</h3></div>
+<div class="card"><b>TOTAL MATURE</b><h3>{{gt["TOTAL MATURE"]}}</h3></div>
+<div class="card"><b>IB MATURE</b><h3>{{gt["IB MATURE"]}}</h3></div>
+<div class="card"><b>OB MATURE</b><h3>{{gt["OB MATURE"]}}</h3></div>
+<div class="card"><b>TOTAL TALK TIME</b><h3>{{gt["TOTAL TALK TIME"]}}</h3></div>
+<div class="card"><b>AHT (AVG)</b><h3>{{gt["AHT"]}}</h3></div>
+<div class="card"><b>LOGIN COUNT</b><h3>{{gt["LOGIN COUNT"]}}</h3></div>
 </div>
 
 <div class="box">
-
-<input id="search" class="search" placeholder="Search Agent..." onkeyup="searchTable()">
-
-<div class="table-wrap">
 <table>
-<thead>
 <tr>
 {% for k in data[0].keys() %}
 <th>{{k}}</th>
 {% endfor %}
 </tr>
-</thead>
-<tbody>
 {% for r in data %}
 <tr>
 {% for v in r.values() %}
@@ -127,10 +43,7 @@ function searchTable(){
 {% endfor %}
 </tr>
 {% endfor %}
-</tbody>
 </table>
-</div>
-
 </div>
 
 <div class="btns">
@@ -138,7 +51,7 @@ function searchTable(){
 <button onclick="location.href='/'">Reset</button>
 </div>
 
-<footer>Website created by Chandan Malakar</footer>
+<footer style="text-align:center;padding:10px">Website created by Chandan Malakar</footer>
 
 </body>
 </html>
