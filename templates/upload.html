@@ -3,24 +3,89 @@
 <head>
 <title>Upload Reports</title>
 <style>
-body{background:#f4fff6;font-family:Segoe UI;text-align:center}
-.box{background:white;width:420px;margin:120px auto;padding:30px;border-radius:10px;box-shadow:0 2px 8px #ccc}
-h2{color:#1fa463}
-input{margin:10px 0;width:100%}
-button{background:#1fa463;color:white;border:none;padding:10px 20px;border-radius:6px;font-size:16px}
+body{
+background:linear-gradient(135deg,#dfeee8,#f7fffb);
+font-family:Segoe UI;
+display:flex;
+justify-content:center;
+align-items:center;
+height:100vh;
+margin:0;
+}
+
+.box{
+background:white;
+width:420px;
+padding:30px;
+border-radius:14px;
+box-shadow:0 6px 18px rgba(0,0,0,0.15);
+}
+
+h2{
+color:#1fa463;
+margin-bottom:20px;
+}
+
+label{
+font-weight:600;
+color:#555;
+display:block;
+margin-top:15px;
+}
+
+input{
+margin-top:6px;
+width:100%;
+padding:8px;
+border-radius:6px;
+border:1px solid #ccc;
+}
+
+button{
+margin-top:25px;
+background:linear-gradient(90deg,#1f7a5c,#1fa463);
+color:white;
+border:none;
+padding:12px;
+width:100%;
+border-radius:8px;
+font-size:17px;
+cursor:pointer;
+transition:.3s;
+}
+
+button:hover{
+transform:scale(1.05);
+background:linear-gradient(90deg,#178a55,#1fa463);
+}
+
+footer{
+text-align:center;
+margin-top:15px;
+font-size:13px;
+color:#777;
+}
 </style>
 </head>
 <body>
+
 <div class="box">
-<h2>Upload Reports</h2>
+<h2>Agent Performance Dashboard</h2>
+
 <form method="post" action="/process" enctype="multipart/form-data">
-<p>Agent Performance Report</p>
+
+<label>Agent Performance Report</label>
 <input type="file" name="agent" required>
-<p>CDR Report</p>
+
+<label>CDR Report</label>
 <input type="file" name="cdr" required>
-<br><br>
-<button>Generate Report</button>
+
+<button>Generate Dashboard</button>
+
 </form>
+
+<footer>Powered by Chandan Malakar</footer>
 </div>
+
 </body>
 </html>
