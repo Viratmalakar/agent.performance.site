@@ -68,22 +68,18 @@ def process():
 
     final["Total Talk Time"]=agent[talk].apply(fix_time)
 
-    final["Total Mature"]=final["Agent Name"].map(mature_cnt).fillna(0).astype(int)
+    final["Total Call"]=final["Agent Name"].map(mature_cnt).fillna(0).astype(int)
     final["IB Mature"]=final["Agent Name"].map(ib_cnt).fillna(0).astype(int)
-    final["OB Mature"]=final["Total Mature"]-final["IB Mature"]
+    final["OB Mature"]=final["Total Call"]-final["IB Mature"]
 
-    final["Total Call"]=final["Total Mature"]
+    final["AHT"]=(final["Total Talk Time"].apply(tsec)/final["Total Call"].replace(0,1)).astype(int).apply(stime)
 
-    final["AHT"]=(final["Total Talk Time"].apply(tsec)/final["Total Mature"].replace(0,1)).astype(int).apply(stime)
-
-    # Remove bad rows
-    final=final[~final["Agent Name"].astype(str).str.lower().isin(["nan","agent name"])]
     final=final.dropna(subset=["Agent Name"])
 
-    # Grand total
+    # GRAND TOTAL
     gt={}
     gt["TOTAL IVR HIT"]=int(cdr[cdr[camp].str.upper()=="CSRINBOUND"].shape[0])
-    gt["TOTAL MATURE"]=int(final["Total Mature"].sum())
+    gt["TOTAL MATURE"]=int(final["Total Call"].sum())
     gt["IB MATURE"]=int(final["IB Mature"].sum())
     gt["OB MATURE"]=int(final["OB Mature"].sum())
     gt["TOTAL TALK TIME"]=stime(final["Total Talk Time"].apply(tsec).sum())
@@ -107,14 +103,33 @@ def export():
     data=pd.DataFrame(session.get("data",[]))
 
     out=io.BytesIO()
+
     with pd.ExcelWriter(out,engine="openpyxl") as writer:
         data.to_excel(writer,index=False,sheet_name="Report")
-        ws=writer.book["Report"]
+
+        ws=writer.sheets["Report"]
+
+        from openpyxl.styles import PatternFill, Font, Border, Side
+
+        header_fill=PatternFill(start_color="1FA463",end_color="1FA463",fill_type="solid")
+        header_font=Font(color="FFFFFF",bold=True)
+        border=Border(left=Side(style="thin"),right=Side(style="thin"),
+                      top=Side(style="thin"),bottom=Side(style="thin"))
+
+        for cell in ws[1]:
+            cell.fill=header_fill
+            cell.font=header_font
+            cell.border=border
+
+        for row in ws.iter_rows(min_row=2):
+            for c in row:
+                c.border=border
 
         for col in ws.columns:
-            ws.column_dimensions[col[0].column_letter].width=22
+            ws.column_dimensions[col[0].column_letter].width=20
 
     out.seek(0)
+
     now=datetime.now().strftime("%d-%m-%y %H-%M-%S")
     fname=f"Agent_Performance_Report_Chandan-Malakar & {now}.xlsx"
     return send_file(out,download_name=fname,as_attachment=True)
