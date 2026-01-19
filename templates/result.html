@@ -36,7 +36,7 @@ button{background:#1fa463;color:white;border:none;padding:10px 18px;border-radiu
 
 <input type="text" id="search" placeholder="Search Agent Full Name" onkeyup="filterTable()">
 
-<div id="tableWrap" style="overflow:auto;max-height:520px">
+<div style="overflow:auto;max-height:520px">
 <table id="tbl">
 <tr>
 <th>Agent Name</th>
@@ -70,7 +70,7 @@ button{background:#1fa463;color:white;border:none;padding:10px 18px;border-radiu
 </div>
 
 <div style="text-align:center">
-<button onclick="copyTableImage()">Copy Table</button>
+<button onclick="copyFullTable()">Copy Table</button>
 <button onclick="location.href='/export'">Export Excel</button>
 <button onclick="location.href='/'">Reset</button>
 </div>
@@ -87,13 +87,18 @@ function filterTable(){
   }
 }
 
-function copyTableImage(){
-    html2canvas(document.getElementById("tableWrap")).then(canvas=>{
+function copyFullTable(){
+    let table=document.getElementById("tbl");
+
+    html2canvas(table,{
+        scrollY:-window.scrollY,
+        backgroundColor:"#ffffff"
+    }).then(canvas=>{
         canvas.toBlob(function(blob){
             navigator.clipboard.write([
                 new ClipboardItem({"image/png":blob})
             ]);
-            alert("Table image copied!");
+            alert("Full table image copied!");
         });
     });
 }
