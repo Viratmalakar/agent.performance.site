@@ -1,10 +1,10 @@
 from flask import Flask, render_template, request, redirect, url_for, session, send_file
 import pandas as pd
-import io
+import io, os
 from datetime import datetime
 
 app = Flask(__name__)
-app.secret_key = "agentdashboard"
+app.secret_key = os.urandom(24)
 
 def fix_time(x):
     if pd.isna(x) or str(x).strip().lower() in ["-","nan",""]:
@@ -19,6 +19,7 @@ def tsec(t):
         return 0
 
 def stime(s):
+    s=int(max(0,s))
     h=s//3600
     m=(s%3600)//60
     s=s%60
@@ -64,7 +65,8 @@ def process():
 
     final["Total Break"]=(agent[t].apply(tsec)+agent[w].apply(tsec)+agent[y].apply(tsec)).apply(stime)
     final["Total Meeting"]=(agent[u].apply(tsec)+agent[x].apply(tsec)).apply(stime)
-    final["Total Net Login"]=(agent[login].apply(tsec)-final["Total Break"].apply(tsec)).apply(stime)
+
+    final["Total Net Login"]=(agent[login].apply(tsec)-final["Total Break"].apply(tsec)).clip(lower=0).apply(stime)
 
     final["Total Talk Time"]=agent[talk].apply(fix_time)
 
@@ -74,13 +76,9 @@ def process():
 
     final["AHT"]=(final["Total Talk Time"].apply(tsec)/final["Total Call"].replace(0,1)).astype(int).apply(stime)
 
-    # ---------------- CLEAN BAD ROWS ----------------
     final = final[final["Agent Name"].notna()]
-    final = final[final["Agent Full Name"].notna()]
-
     final = final[~final["Agent Name"].astype(str).str.lower().isin(["nan","agent name","aht"])]
 
-    # ---------------- GRAND TOTAL BEFORE REORDER ----------------
     total_talk_sec = final["Total Talk Time"].apply(tsec).sum()
     total_call = int(final["Total Call"].sum())
 
@@ -93,7 +91,6 @@ def process():
     gt["AHT"]=stime(int(total_talk_sec/max(1,total_call)))
     gt["LOGIN COUNT"]=int(final["Agent Name"].count())
 
-    # ---------------- FINAL COLUMN ORDER ----------------
     final = final[[
         "Agent Name",
         "Agent Full Name",
@@ -128,18 +125,8 @@ def export():
         wb=writer.book
         ws=writer.sheets["Report"]
 
-        header=wb.add_format({
-            "bold":True,
-            "bg_color":"#1fa463",
-            "color":"white",
-            "border":1,
-            "align":"center"
-        })
-
-        cell=wb.add_format({
-            "border":1,
-            "align":"center"
-        })
+        header=wb.add_format({"bold":True,"bg_color":"#1fa463","color":"white","border":1,"align":"center"})
+        cell=wb.add_format({"border":1,"align":"center"})
 
         for col in range(len(data.columns)):
             ws.write(0,col,data.columns[col],header)
@@ -151,5 +138,8 @@ def export():
     out.seek(0)
 
     now=datetime.now().strftime("%d-%m-%y %H-%M-%S")
-    fname=f"Agent_Performance_Report_Chandan-Malakar & {now}.xlsx"
+    fname=f"Agent_Performance_Report_{now}.xlsx"
     return send_file(out,download_name=fname,as_attachment=True)
+
+if __name__=="__main__":
+    app.run(debug=True)
