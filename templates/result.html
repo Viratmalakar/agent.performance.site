@@ -19,6 +19,19 @@ font-size:26px;
 text-align:center;
 }
 
+.search-box{
+text-align:center;
+margin:10px 20px;
+}
+
+.search-box input{
+width:320px;
+padding:8px;
+border-radius:6px;
+border:1px solid #aaa;
+font-size:14px;
+}
+
 .cards{
 display:grid;
 grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
@@ -118,23 +131,41 @@ transform:scale(1.05);
 <div class="card"><b>LOGIN COUNT</b><h3>{{gt["LOGIN COUNT"]}}</h3></div>
 </div>
 
+<div class="search-box">
+<input type="text" id="searchInput" placeholder="Search by Agent Full Name..." onkeyup="filterTable()">
+</div>
+
 <div class="box">
 <div class="table-box" id="tableArea">
 <div class="scroll" id="scrollArea">
-<table>
+<table id="dataTable">
 <thead>
 <tr>
-{% for k in data[0].keys() %}
-<th>{{k}}</th>
-{% endfor %}
+<th>Agent Name</th>
+<th>Agent Full Name</th>
+<th>Total Login Time</th>
+<th>Total Net Login</th>
+<th>Total Break</th>
+<th>Total Meeting</th>
+<th>AHT</th>
+<th>Total Call</th>
+<th>IB Mature</th>
+<th>OB Mature</th>
 </tr>
 </thead>
 <tbody>
 {% for r in data %}
 <tr>
-{% for v in r.values() %}
-<td>{{v}}</td>
-{% endfor %}
+<td>{{r["Agent Name"]}}</td>
+<td>{{r["Agent Full Name"]}}</td>
+<td>{{r["Total Login Time"]}}</td>
+<td>{{r["Total Net Login"]}}</td>
+<td>{{r["Total Break"]}}</td>
+<td>{{r["Total Meeting"]}}</td>
+<td>{{r["AHT"]}}</td>
+<td>{{r["Total Call"]}}</td>
+<td>{{r["IB Mature"]}}</td>
+<td>{{r["OB Mature"]}}</td>
 </tr>
 {% endfor %}
 </tbody>
@@ -163,6 +194,20 @@ navigator.clipboard.write([new ClipboardItem({"image/png":b})]);
 alert("Full table copied as image");
 });
 });
+}
+
+function filterTable(){
+let input=document.getElementById("searchInput").value.toUpperCase();
+let table=document.getElementById("dataTable");
+let tr=table.getElementsByTagName("tr");
+
+for(let i=1;i<tr.length;i++){
+let td=tr[i].getElementsByTagName("td")[1]; // Agent Full Name column
+if(td){
+let txt=td.textContent || td.innerText;
+tr[i].style.display= txt.toUpperCase().includes(input) ? "" : "none";
+}
+}
 }
 </script>
 
