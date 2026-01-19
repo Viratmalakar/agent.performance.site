@@ -118,6 +118,11 @@ def export():
 
     data=pd.DataFrame(session["data"])
 
+    data=data[[
+    "Agent Name","Agent Full Name","Total Login Time","Total Net Login",
+    "Total Break","Total Meeting","AHT","Total Call","IB Mature","OB Mature"
+    ]]
+
     out=io.BytesIO()
     with pd.ExcelWriter(out,engine="xlsxwriter") as writer:
         data.to_excel(writer,index=False,sheet_name="Report")
