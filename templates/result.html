@@ -1,39 +1,89 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Result</title>
+<title>Agent Performance Result</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
 <style>
 body{font-family:Segoe UI;background:#f4fff6;margin:0}
 header{background:#1fa463;color:white;padding:15px;font-size:22px;text-align:center}
 
+.cards{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+gap:15px;
+padding:20px;
+}
+
+.card{
+background:white;
+padding:15px;
+border-left:6px solid #1fa463;
+box-shadow:0 2px 6px #ccc;
+}
+
 .search-box{
-    text-align:center;
-    padding:10px;
+text-align:center;
+margin-bottom:10px;
 }
+
 .search-box input{
-    width:280px;
-    padding:8px;
-    border:2px solid #1fa463;
-    border-radius:6px;
-    font-size:15px;
+padding:10px;
+width:280px;
+border:1px solid #1fa463;
+border-radius:6px;
+font-size:15px;
 }
 
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:15px;padding:20px}
-.card{background:white;padding:15px;border-left:6px solid #1fa463;box-shadow:0 2px 6px #ccc}
+.table-box{
+padding:20px;
+background:white;
+margin:0 20px 20px 20px;
+border-radius:8px;
+box-shadow:0 2px 6px #ccc;
+overflow:auto;
+max-height:520px;
+}
 
-.table-box{padding:20px;overflow:auto;max-height:600px}
-table{width:100%;border-collapse:collapse;background:white}
-th,td{border:1px solid #ddd;padding:8px;text-align:center}
-th{background:#1fa463;color:white;position:sticky;top:0}
+table{
+width:100%;
+border-collapse:collapse;
+font-size:14px;
+}
+
+th,td{
+border:1px solid #ddd;
+padding:8px;
+text-align:center;
+}
+
+th{
+background:#1fa463;
+color:white;
+position:sticky;
+top:0;
+}
 
 .btns{text-align:center;margin:20px}
-button{background:#1fa463;color:white;border:none;padding:10px 18px;border-radius:6px;margin:5px}
+button{
+background:#1fa463;
+color:white;
+border:none;
+padding:10px 18px;
+border-radius:6px;
+margin:5px;
+cursor:pointer;
+}
+
+footer{text-align:center;padding:10px;color:#555}
 </style>
 </head>
+
 <body>
 
 <header>Agent Performance Dashboard</header>
 
+<!-- DASHBOARD CARDS -->
 <div class="cards">
 <div class="card"><b>TOTAL IVR HIT</b><h3>{{gt["Total IVR Hit"]}}</h3></div>
 <div class="card"><b>TOTAL MATURE</b><h3>{{gt["Total Mature"]}}</h3></div>
@@ -41,14 +91,16 @@ button{background:#1fa463;color:white;border:none;padding:10px 18px;border-radiu
 <div class="card"><b>OB MATURE</b><h3>{{gt["OB Mature"]}}</h3></div>
 <div class="card"><b>TOTAL TALK TIME</b><h3>{{gt["Total Talk Time"]}}</h3></div>
 <div class="card"><b>AHT (AVG)</b><h3>{{gt["AHT"]}}</h3></div>
-<div class="card"><b>LOGIN COUNT</b><h3>{{gt["Login Count"]}}</h3></div>
+<div class="card"><b>LOGIN COUNT</b><h3>{{data|length}}</h3></div>
 </div>
 
+<!-- SEARCH -->
 <div class="search-box">
-<input type="text" id="search" placeholder="Search Agent Name..." onkeyup="filterTable()">
+<input type="text" id="search" placeholder="Search Agent Full Name..." onkeyup="filterTable()">
 </div>
 
-<div class="table-box">
+<!-- TABLE -->
+<div class="table-box" id="tableBox">
 <table id="tbl">
 <thead>
 <tr>
@@ -64,6 +116,7 @@ button{background:#1fa463;color:white;border:none;padding:10px 18px;border-radiu
 <th>OB Mature</th>
 </tr>
 </thead>
+
 <tbody>
 {% for r in data %}
 <tr>
@@ -74,7 +127,7 @@ button{background:#1fa463;color:white;border:none;padding:10px 18px;border-radiu
 <td>{{r["Total Break"]}}</td>
 <td>{{r["Total Meeting"]}}</td>
 <td>{{r["AHT"]}}</td>
-<td>{{r["Total Call"]}}</td>
+<td>{{r["Total Mature"]}}</td>
 <td>{{r["IB Mature"]}}</td>
 <td>{{r["OB Mature"]}}</td>
 </tr>
@@ -83,13 +136,14 @@ button{background:#1fa463;color:white;border:none;padding:10px 18px;border-radiu
 </table>
 </div>
 
+<!-- BUTTONS -->
 <div class="btns">
-<button onclick="copyTable()">Copy Table</button>
+<button onclick="copyTableImage()">Copy Table Image</button>
 <button onclick="location.href='/export'">Export Excel</button>
 <button onclick="location.href='/'">Reset</button>
 </div>
 
-<footer style="text-align:center;padding:10px">Website created by Chandan Malakar</footer>
+<footer>Website created by Chandan Malakar</footer>
 
 <script>
 function filterTable(){
@@ -97,18 +151,18 @@ function filterTable(){
     let rows=document.querySelectorAll("#tbl tbody tr");
 
     rows.forEach(r=>{
-        let name=r.cells[0].innerText.toLowerCase();
+        let name=r.cells[1].innerText.toLowerCase(); // Agent Full Name
         r.style.display=name.includes(input)?"":"none";
     });
 }
 
-function copyTable(){
-    let range=document.createRange();
-    range.selectNode(document.getElementById("tbl"));
-    window.getSelection().removeAllRanges();
-    window.getSelection().addRange(range);
-    document.execCommand("copy");
-    alert("Table copied successfully!");
+function copyTableImage(){
+    html2canvas(document.getElementById("tableBox")).then(canvas=>{
+        canvas.toBlob(b=>{
+            navigator.clipboard.write([new ClipboardItem({"image/png":b})]);
+            alert("Table image copied!");
+        });
+    });
 }
 </script>
 
