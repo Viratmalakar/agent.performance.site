@@ -1,25 +1,147 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Dashboard</title>
+<title>Agent Performance Dashboard</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
 <style>
-body{font-family:Segoe UI;background:#f4fff6;margin:0}
-header{background:#1fa463;color:white;padding:15px;font-size:22px;text-align:center}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:15px;padding:20px}
-.card{background:white;padding:15px;border-left:6px solid #1fa463;box-shadow:0 2px 6px #ccc;transition:.3s}
-.card:hover{transform:scale(1.05)}
-.box{padding:20px}
-table{width:100%;border-collapse:collapse;background:white}
-th,td{border:1px solid #ddd;padding:8px;text-align:center}
-th{background:#1fa463;color:white}
-tbody tr:hover{background:#eafff1}
-.search{width:250px;padding:8px;margin-bottom:10px}
-.scroll{max-height:520px;overflow:auto}
-button{background:#1fa463;color:white;border:none;padding:10px 18px;border-radius:6px;margin:5px}
+body{
+font-family:Segoe UI;
+background:linear-gradient(135deg,#dfeee8,#f7fffb);
+margin:0;
+}
+
+header{
+background:linear-gradient(90deg,#1f7a5c,#1fa463);
+color:white;
+padding:20px;
+font-size:26px;
+text-align:center;
+letter-spacing:1px;
+}
+
+.cards{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+gap:15px;
+padding:20px;
+}
+
+.card{
+background:rgba(255,255,255,0.9);
+padding:18px;
+border-radius:12px;
+box-shadow:0 6px 15px rgba(0,0,0,0.1);
+border-left:6px solid #1fa463;
+backdrop-filter:blur(6px);
+transition:.3s;
+}
+
+.card:hover{
+transform:translateY(-5px) scale(1.03);
+}
+
+.card h3{margin:5px 0;color:#1f7a5c}
+
+.box{
+padding:20px;
+}
+
+.table-box{
+background:rgba(255,255,255,0.85);
+border-radius:14px;
+box-shadow:0 6px 15px rgba(0,0,0,0.12);
+padding:15px;
+backdrop-filter:blur(6px);
+}
+
+.scroll{
+max-height:620px;
+overflow:auto;
+}
+
+table{
+width:100%;
+border-collapse:collapse;
+}
+
+th{
+background:#1f7a5c;
+color:white;
+padding:10px;
+position:sticky;
+top:0;
+}
+
+td{
+padding:8px;
+border-bottom:1px solid #ddd;
+text-align:center;
+}
+
+tbody tr:hover{
+background:#e9fff5;
+}
+
+.buttons{
+text-align:center;
+margin:20px;
+}
+
+button{
+background:#1fa463;
+color:white;
+border:none;
+padding:10px 20px;
+border-radius:8px;
+font-size:15px;
+margin:5px;
+cursor:pointer;
+transition:.3s;
+}
+
+button:hover{
+background:#178a55;
+transform:scale(1.05);
+}
+
+#loader{
+position:fixed;
+top:0;
+left:0;
+width:100%;
+height:100%;
+background:rgba(255,255,255,0.9);
+display:flex;
+justify-content:center;
+align-items:center;
+z-index:999;
+}
+
+.spinner{
+width:60px;
+height:60px;
+border:6px solid #cceee0;
+border-top:6px solid #1fa463;
+border-radius:50%;
+animation:spin 1s linear infinite;
+}
+
+@keyframes spin{
+100%{transform:rotate(360deg);}
+}
+
+footer{
+text-align:center;
+padding:12px;
+color:#555;
+}
 </style>
 </head>
-<body>
+
+<body onload="hideLoader()">
+
+<div id="loader"><div class="spinner"></div></div>
 
 <header>Agent Performance Dashboard</header>
 
@@ -29,50 +151,55 @@ button{background:#1fa463;color:white;border:none;padding:10px 18px;border-radiu
 <div class="card"><b>IB MATURE</b><h3>{{gt["IB MATURE"]}}</h3></div>
 <div class="card"><b>OB MATURE</b><h3>{{gt["OB MATURE"]}}</h3></div>
 <div class="card"><b>TOTAL TALK TIME</b><h3>{{gt["TOTAL TALK TIME"]}}</h3></div>
-<div class="card"><b>AHT</b><h3>{{gt["AHT"]}}</h3></div>
+<div class="card"><b>AHT (AVG)</b><h3>{{gt["AHT"]}}</h3></div>
 <div class="card"><b>LOGIN COUNT</b><h3>{{gt["LOGIN COUNT"]}}</h3></div>
 </div>
 
 <div class="box">
-<input class="search" id="search" placeholder="Search Agent Name...">
-<button onclick="copyImage()">Copy Table Image</button>
-
-<div class="scroll" id="tableArea">
+<div class="table-box" id="tableArea">
+<div class="scroll">
 <table>
 <thead>
-<tr>{% for k in data[0].keys() %}<th>{{k}}</th>{% endfor %}</tr>
+<tr>
+{% for k in data[0].keys() %}
+<th>{{k}}</th>
+{% endfor %}
+</tr>
 </thead>
 <tbody>
 {% for r in data %}
-<tr>{% for v in r.values() %}<td>{{v}}</td>{% endfor %}</tr>
+<tr>
+{% for v in r.values() %}
+<td>{{v}}</td>
+{% endfor %}
+</tr>
 {% endfor %}
 </tbody>
 </table>
 </div>
 </div>
+</div>
 
-<div style="text-align:center">
+<div class="buttons">
+<button onclick="copyImage()">Copy Table</button>
 <button onclick="location.href='/export'">Export Excel</button>
 <button onclick="location.href='/'">Reset</button>
 </div>
 
-<footer style="text-align:center;padding:10px">Website created by Chandan Malakar</footer>
+<footer>Website created by Chandan Malakar</footer>
 
 <script>
-document.getElementById("search").addEventListener("keyup",function(){
- let v=this.value.toLowerCase();
- document.querySelectorAll("tbody tr").forEach(r=>{
-   r.style.display=r.innerText.toLowerCase().includes(v)?"":"none";
- });
-});
+function hideLoader(){
+setTimeout(()=>{document.getElementById("loader").style.display="none"},700);
+}
 
 function copyImage(){
- html2canvas(document.getElementById("tableArea")).then(c=>{
-   c.toBlob(b=>{
-     navigator.clipboard.write([new ClipboardItem({"image/png":b})]);
-     alert("Table copied as image");
-   });
- });
+html2canvas(document.getElementById("tableArea"),{scale:2}).then(c=>{
+c.toBlob(b=>{
+navigator.clipboard.write([new ClipboardItem({"image/png":b})]);
+alert("Full table copied as scanned image");
+});
+});
 }
 </script>
 
