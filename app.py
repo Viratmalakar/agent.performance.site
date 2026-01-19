@@ -1,12 +1,11 @@
 from flask import Flask, render_template, request, redirect, url_for, session, send_file
 import pandas as pd
-import io
+import io, json
 from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = "agentdashboard"
 
-# ---------------- HELPERS ----------------
 def fix_time(x):
     if pd.isna(x) or str(x).strip().lower() in ["-","nan",""]:
         return "00:00:00"
@@ -25,7 +24,6 @@ def stime(s):
     s=s%60
     return f"{h:02d}:{m:02d}:{s:02d}"
 
-# ---------------- ROUTES ----------------
 @app.route("/")
 def upload():
     return render_template("upload.html")
@@ -70,27 +68,20 @@ def process():
 
     final["Total Talk Time"]=agent[talk].apply(fix_time)
 
-    final["Total Call"]=final["Agent Name"].map(mature_cnt).fillna(0).astype(int)
+    final["Total Mature"]=final["Agent Name"].map(mature_cnt).fillna(0).astype(int)
     final["IB Mature"]=final["Agent Name"].map(ib_cnt).fillna(0).astype(int)
-    final["OB Mature"]=final["Total Call"]-final["IB Mature"]
+    final["OB Mature"]=final["Total Mature"]-final["IB Mature"]
 
-    final["AHT"]=(final["Total Talk Time"].apply(tsec)/final["Total Call"].replace(0,1)).astype(int).apply(stime)
+    final["AHT"]=(final["Total Talk Time"].apply(tsec)/final["Total Mature"].replace(0,1)).astype(int).apply(stime)
 
-    # -------- PERMANENT BAD ROW REMOVAL --------
-    final = final[final["Agent Name"].notna()]
-    final = final[final["Agent Full Name"].notna()]
+    # ❌ PERMANENT BAD ROW REMOVAL
+    final=final[~final["Agent Name"].astype(str).str.lower().isin([
+        "nan","agent name"
+    ])]
+    final=final.dropna(how="all")
 
-    final = final[~final["Agent Name"].astype(str).str.lower().isin(
-        ["nan","agent name","aht"]
-    )]
-
-    final = final[~(
-        (final["Agent Name"].astype(str).str.strip()=="") &
-        (final["Agent Full Name"].astype(str).str.strip()=="")
-    )]
-
-    # -------- COLUMN ORDER --------
-    final = final[[
+    # ✅ SEQUENCE FIX
+    final=final[[
         "Agent Name",
         "Agent Full Name",
         "Total Login Time",
@@ -98,20 +89,21 @@ def process():
         "Total Break",
         "Total Meeting",
         "AHT",
-        "Total Call",
+        "Total Mature",
         "IB Mature",
-        "OB Mature"
+        "OB Mature",
+        "Total Talk Time"
     ]]
 
-    # -------- GRAND TOTAL --------
+    # ---- GRAND TOTAL ----
     gt={}
     gt["TOTAL IVR HIT"]=int(cdr[cdr[camp].str.upper()=="CSRINBOUND"].shape[0])
-    gt["TOTAL MATURE"]=int(final["Total Call"].sum())
+    gt["TOTAL MATURE"]=int(final["Total Mature"].sum())
     gt["IB MATURE"]=int(final["IB Mature"].sum())
     gt["OB MATURE"]=int(final["OB Mature"].sum())
     gt["TOTAL TALK TIME"]=stime(final["Total Talk Time"].apply(tsec).sum())
     gt["AHT"]=stime(int(final["Total Talk Time"].apply(tsec).sum()/max(1,gt["TOTAL MATURE"])))
-    gt["LOGIN COUNT"]=int(final["Agent Name"].count())
+    gt["LOGIN COUNT"]=int(final["Agent Name"].nunique())
 
     session["data"]=final.to_dict(orient="records")
     session["gt"]=gt
@@ -120,40 +112,17 @@ def process():
 
 @app.route("/result")
 def result():
-    return render_template("result.html",data=session["data"],gt=session["gt"])
+    return render_template("result.html",
+        data=session.get("data",[]),
+        gt=session.get("gt",{})
+    )
 
 @app.route("/export")
 def export():
-
-    data=pd.DataFrame(session["data"])
+    data=pd.DataFrame(session.get("data",[]))
 
     out=io.BytesIO()
-    with pd.ExcelWriter(out,engine="xlsxwriter") as writer:
-        data.to_excel(writer,index=False,sheet_name="Report")
-
-        wb=writer.book
-        ws=writer.sheets["Report"]
-
-        header=wb.add_format({
-            "bold":True,
-            "bg_color":"#1fa463",
-            "color":"white",
-            "border":1,
-            "align":"center"
-        })
-
-        cell=wb.add_format({
-            "border":1,
-            "align":"center"
-        })
-
-        for col in range(len(data.columns)):
-            ws.write(0,col,data.columns[col],header)
-            ws.set_column(col,col,22)
-
-        for r in range(1,len(data)+1):
-            ws.set_row(r,None,cell)
-
+    data.to_excel(out,index=False)
     out.seek(0)
 
     now=datetime.now().strftime("%d-%m-%y %H-%M-%S")
