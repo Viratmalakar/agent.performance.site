@@ -1,13 +1,14 @@
 from flask import Flask, render_template, request, redirect, url_for, session, send_file
 import pandas as pd
-import io, json
+import io
 from datetime import datetime
+from openpyxl.styles import Font,PatternFill,Border,Side
 
 app = Flask(__name__)
-app.secret_key = "agentdashboard"
+app.secret_key="agentdashboard"
 
 def fix_time(x):
-    if pd.isna(x) or str(x).strip().lower() in ["-","nan",""]:
+    if pd.isna(x) or str(x).lower() in ["nan","-",""]:
         return "00:00:00"
     return str(x)
 
@@ -48,11 +49,8 @@ def process():
     camp=cdr.columns[6]
     disp=cdr.columns[25]
 
-    cdr[disp]=cdr[disp].astype(str)
-    cdr[camp]=cdr[camp].astype(str)
-
-    mature=cdr[cdr[disp].str.contains("callmature|transfer",case=False,na=False)]
-    ib=mature[mature[camp].str.upper()=="CSRINBOUND"]
+    mature=cdr[cdr[disp].astype(str).str.contains("callmature|transfer",case=False,na=False)]
+    ib=mature[mature[camp].astype(str).str.upper()=="CSRINBOUND"]
 
     mature_cnt=mature.groupby(c_emp).size()
     ib_cnt=ib.groupby(c_emp).size()
@@ -74,57 +72,63 @@ def process():
 
     final["AHT"]=(final["Total Talk Time"].apply(tsec)/final["Total Mature"].replace(0,1)).astype(int).apply(stime)
 
-    # ❌ PERMANENT BAD ROW REMOVAL
-    final=final[~final["Agent Name"].astype(str).str.lower().isin([
-        "nan","agent name"
-    ])]
+    # ❌ BAD ROW REMOVAL PERMANENT
+    final=final[~final["Agent Name"].astype(str).str.lower().isin(["nan","agent name"])]
     final=final.dropna(how="all")
 
-    # ✅ SEQUENCE FIX
-    final=final[[
-        "Agent Name",
-        "Agent Full Name",
-        "Total Login Time",
-        "Total Net Login",
-        "Total Break",
-        "Total Meeting",
-        "AHT",
-        "Total Mature",
-        "IB Mature",
-        "OB Mature",
-        "Total Talk Time"
-    ]]
+    # 🔒 COLUMN ORDER LOCK
+    final=final[
+        ["Agent Name","Agent Full Name","Total Login Time",
+         "Total Net Login","Total Break","Total Meeting",
+         "AHT","Total Mature","IB Mature","OB Mature","Total Talk Time"]
+    ]
 
     # ---- GRAND TOTAL ----
     gt={}
-    gt["TOTAL IVR HIT"]=int(cdr[cdr[camp].str.upper()=="CSRINBOUND"].shape[0])
+    gt["TOTAL IVR HIT"]=int(cdr[cdr[camp].astype(str).str.upper()=="CSRINBOUND"].shape[0])
     gt["TOTAL MATURE"]=int(final["Total Mature"].sum())
     gt["IB MATURE"]=int(final["IB Mature"].sum())
     gt["OB MATURE"]=int(final["OB Mature"].sum())
     gt["TOTAL TALK TIME"]=stime(final["Total Talk Time"].apply(tsec).sum())
     gt["AHT"]=stime(int(final["Total Talk Time"].apply(tsec).sum()/max(1,gt["TOTAL MATURE"])))
-    gt["LOGIN COUNT"]=int(final["Agent Name"].nunique())
+    gt["LOGIN COUNT"]=final["Agent Name"].nunique()
 
     session["data"]=final.to_dict(orient="records")
     session["gt"]=gt
 
-    return redirect(url_for("result"))
+    return redirect("/result")
 
 @app.route("/result")
 def result():
-    return render_template("result.html",
-        data=session.get("data",[]),
-        gt=session.get("gt",{})
-    )
+    return render_template("result.html",data=session.get("data",[]),gt=session.get("gt",{}))
 
 @app.route("/export")
 def export():
     data=pd.DataFrame(session.get("data",[]))
 
     out=io.BytesIO()
-    data.to_excel(out,index=False)
-    out.seek(0)
+    with pd.ExcelWriter(out,engine="openpyxl") as writer:
+        data.to_excel(writer,index=False,sheet_name="Report")
+        ws=writer.sheets["Report"]
 
+        fill=PatternFill("solid",fgColor="1fa463")
+        font=Font(color="FFFFFF",bold=True)
+        border=Border(left=Side(style="thin"),right=Side(style="thin"),
+                      top=Side(style="thin"),bottom=Side(style="thin"))
+
+        for c in ws[1]:
+            c.fill=fill
+            c.font=font
+            c.border=border
+
+        for r in ws.iter_rows(min_row=2):
+            for c in r:
+                c.border=border
+
+        for col in ws.columns:
+            ws.column_dimensions[col[0].column_letter].width=18
+
+    out.seek(0)
     now=datetime.now().strftime("%d-%m-%y %H-%M-%S")
     fname=f"Agent_Performance_Report_Chandan-Malakar & {now}.xlsx"
     return send_file(out,download_name=fname,as_attachment=True)
