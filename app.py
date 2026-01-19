@@ -74,8 +74,14 @@ def process():
 
     final["AHT"]=(final["Total Talk Time"].apply(tsec)/final["Total Call"].replace(0,1)).astype(int).apply(stime)
 
+    # 🔥 PERMANENT CLEAN
     final=final[final["Agent Name"].notna()]
+    final=final[final["Agent Full Name"].notna()]
+    final=final[~((final["Agent Name"].astype(str).str.lower()=="nan") &
+                   (final["Agent Full Name"].astype(str).str.lower()=="nan"))]
     final=final[final["Agent Name"].astype(str).str.lower()!="agent name"]
+
+    final=final.reset_index(drop=True)
 
     # ---- GRAND TOTAL ----
     gt={}
