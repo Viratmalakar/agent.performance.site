@@ -4,7 +4,7 @@ import io, os
 from datetime import datetime
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)
+app.secret_key = "agentdashboard_final_2026"
 
 # ---------- TIME HELPERS ----------
 def fix_time(x):
@@ -82,7 +82,7 @@ def process():
 
     final = final[final["Agent Name"].notna()]
 
-    # 🔴 HIGHLIGHT FLAGS
+    # 🔴 Highlight rules
     final["__red_net"]=final.apply(lambda r: is_red_netlogin(r["Total Login Time"],r["Total Net Login"]),axis=1)
     final["__red_break"]=final["Total Break"].apply(lambda x: tsec(x)>tsec("00:40:00"))
     final["__red_meet"]=final["Total Meeting"].apply(lambda x: tsec(x)>tsec("00:30:00"))
@@ -113,10 +113,15 @@ def process():
 
 @app.route("/result")
 def result():
+    if "data" not in session:
+        return redirect(url_for("upload"))
     return render_template("result.html",data=session["data"],gt=session["gt"])
 
 @app.route("/export")
 def export():
+
+    if "data" not in session:
+        return redirect(url_for("upload"))
 
     data=pd.DataFrame(session["data"])
     flags=["__red_net","__red_break","__red_meet"]
@@ -140,14 +145,12 @@ def export():
         for r in range(len(excel)):
             for c in range(len(excel.columns)):
                 fmt=cell
-                if c==3 and data.iloc[r]["__red_net"]: fmt=red
-                if c==4 and data.iloc[r]["__red_break"]: fmt=red
-                if c==5 and data.iloc[r]["__red_meet"]: fmt=red
+                if data.iloc[r]["__red_net"] or data.iloc[r]["__red_break"] or data.iloc[r]["__red_meet"]:
+                    fmt=red
                 ws.write(r+1,c,excel.iloc[r,c],fmt)
 
     out.seek(0)
-    fname=f"Agent_Performance_Report_{datetime.now().strftime('%d-%m-%y %H-%M-%S')}.xlsx"
-    return send_file(out,download_name=fname,as_attachment=True)
+    return send_file(out,download_name="Agent_Performance_Report.xlsx",as_attachment=True)
 
 if __name__=="__main__":
     app.run()
