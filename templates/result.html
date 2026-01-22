@@ -12,33 +12,68 @@ margin:20px;
 }
 
 h2{
-color:#1fa463;
 text-align:center;
+color:#1fa463;
+}
+
+.table-box{
+background:white;
+padding:15px;
+border-radius:10px;
+box-shadow:0 2px 8px rgba(0,0,0,0.1);
+overflow:auto;
+max-height:650px;
 }
 
 table{
 width:100%;
 border-collapse:collapse;
-margin-top:20px;
 }
 
 th{
 background:#1fa463;
 color:white;
-padding:8px;
+padding:10px;
 border:1px solid #ddd;
 position:sticky;
 top:0;
 }
 
 td{
-padding:7px;
+padding:8px;
 border:1px solid #ddd;
 text-align:center;
 }
 
 tbody tr:hover{
 background:#e9fff5;
+}
+
+/* 🔴 Highlight cell style */
+.redcell{
+background:#ffdddd;
+color:navy;
+font-weight:bold;
+}
+
+.buttons{
+text-align:center;
+margin-top:20px;
+}
+
+button{
+background:#1fa463;
+color:white;
+border:none;
+padding:10px 18px;
+border-radius:6px;
+font-size:15px;
+cursor:pointer;
+margin:5px;
+}
+
+button:hover{
+background:#178a55;
 }
 </style>
 </head>
@@ -47,7 +82,9 @@ background:#e9fff5;
 
 <h2>Agent Performance Dashboard</h2>
 
+<div class="table-box">
 <table>
+
 <thead>
 <tr>
 <th>Agent Name</th>
@@ -67,36 +104,36 @@ background:#e9fff5;
 {% for r in data %}
 <tr>
 
-<td>{{r["Agent Name"]}}</td>
-<td>{{r["Agent Full Name"]}}</td>
-<td>{{r["Total Login Time"]}}</td>
+<td>{{ r["Agent Name"] }}</td>
+<td>{{ r["Agent Full Name"] }}</td>
+<td>{{ r["Total Login Time"] }}</td>
 
-<td style="{% if r['__red_net'] %}color:red;font-weight:bold{% endif %}">
-{{r["Total Net Login"]}}
+<td class="{% if r['__red_net'] %}redcell{% endif %}">
+{{ r["Total Net Login"] }}
 </td>
 
-<td style="{% if r['__red_break'] %}color:red;font-weight:bold{% endif %}">
-{{r["Total Break"]}}
+<td class="{% if r['__red_break'] %}redcell{% endif %}">
+{{ r["Total Break"] }}
 </td>
 
-<td style="{% if r['__red_meet'] %}color:red;font-weight:bold{% endif %}">
-{{r["Total Meeting"]}}
+<td class="{% if r['__red_meet'] %}redcell{% endif %}">
+{{ r["Total Meeting"] }}
 </td>
 
-<td>{{r["AHT"]}}</td>
-<td>{{r["Total Call"]}}</td>
-<td>{{r["IB Mature"]}}</td>
-<td>{{r["OB Mature"]}}</td>
+<td>{{ r["AHT"] }}</td>
+<td>{{ r["Total Call"] }}</td>
+<td>{{ r["IB Mature"] }}</td>
+<td>{{ r["OB Mature"] }}</td>
 
 </tr>
 {% endfor %}
 </tbody>
-</table>
 
-<br><br>
-<div style="text-align:center;">
-<a href="/export">⬇ Download Excel</a> |
-<a href="/">🔄 Reset</a>
+</table>
+</div>
+
+<div class="buttons">
+<button onclick="location.href='/'">Reset</button>
 </div>
 
 </body>
