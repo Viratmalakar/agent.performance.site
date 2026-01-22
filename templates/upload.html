@@ -1,114 +1,25 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Agent Performance Dashboard</title>
-
+<title>Agent Dashboard</title>
 <style>
-body{
-margin:0;
-font-family:Segoe UI,Arial;
-background:linear-gradient(135deg,#1fa463,#0f6b45);
-height:100vh;
-display:flex;
-justify-content:center;
-align-items:center;
-}
-
-.container{
-background:white;
-width:420px;
-padding:30px;
-border-radius:18px;
-box-shadow:0 10px 30px rgba(0,0,0,0.25);
-animation:fadein .8s ease;
-}
-
-@keyframes fadein{
-from{opacity:0;transform:translateY(20px);}
-to{opacity:1;transform:translateY(0);}
-}
-
-h2{
-text-align:center;
-color:#1fa463;
-margin-bottom:10px;
-}
-
-p{
-text-align:center;
-color:#666;
-font-size:14px;
-margin-bottom:25px;
-}
-
-.label{
-text-align:left;
-margin-top:15px;
-font-weight:bold;
-color:#333;
-}
-
-input[type=file]{
-width:100%;
-padding:8px;
-border:1px solid #ccc;
-border-radius:6px;
-margin-top:5px;
-background:#f9f9f9;
-}
-
-button{
-width:100%;
-margin-top:25px;
-padding:12px;
-background:#1fa463;
-border:none;
-color:white;
-font-size:17px;
-font-weight:bold;
-border-radius:8px;
-cursor:pointer;
-transition:.3s;
-}
-
-button:hover{
-background:#178a55;
-transform:scale(1.03);
-}
-
-footer{
-text-align:center;
-font-size:12px;
-color:#777;
-margin-top:15px;
-}
+body{background:linear-gradient(135deg,#0f766e,#22c55e);font-family:Segoe UI;display:flex;justify-content:center;align-items:center;height:100vh}
+.box{background:white;width:420px;padding:30px;border-radius:18px;box-shadow:0 10px 25px rgba(0,0,0,.25)}
+h2{text-align:center;color:#0f766e}
+input{width:100%;margin:10px 0}
+button{width:100%;padding:12px;background:#0f766e;color:white;border:none;border-radius:8px;font-size:16px}
 </style>
 </head>
-
 <body>
-
-<div class="container">
-
+<div class="box">
 <h2>Agent Performance Dashboard</h2>
-<p>Upload your reports and generate dashboard instantly</p>
-
 <form method="post" action="/process" enctype="multipart/form-data">
-
-<div class="label">Agent Performance Report</div>
+<p>Agent Performance Report</p>
 <input type="file" name="agent" required>
-
-<div class="label">CDR Report</div>
+<p>CDR Report</p>
 <input type="file" name="cdr" required>
-
-<button type="submit">🚀 Generate Dashboard</button>
-
+<button>Generate Dashboard</button>
 </form>
-
-<footer>
-Powered by Chandan Malakar
-</footer>
-
 </div>
-
 </body>
 </html>
