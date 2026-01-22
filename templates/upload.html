@@ -3,21 +3,103 @@
 <head>
 <title>Upload Reports</title>
 <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+
+<style>
+body{
+background:linear-gradient(135deg,#dfeee8,#f7fffb);
+font-family:Segoe UI;
+display:flex;
+justify-content:center;
+align-items:center;
+height:100vh;
+margin:0;
+}
+
+.box{
+background:white;
+width:420px;
+padding:30px;
+border-radius:14px;
+box-shadow:0 6px 18px rgba(0,0,0,0.15);
+text-align:center;
+}
+
+h2{
+color:#1fa463;
+margin-bottom:20px;
+}
+
+p{
+color:#666;
+font-size:14px;
+margin-bottom:25px;
+}
+
+label{
+font-weight:600;
+color:#444;
+display:block;
+margin-top:15px;
+text-align:left;
+}
+
+input{
+margin-top:6px;
+width:100%;
+padding:8px;
+border-radius:6px;
+border:1px solid #ccc;
+font-size:14px;
+}
+
+button{
+margin-top:25px;
+background:linear-gradient(90deg,#1f7a5c,#1fa463);
+color:white;
+border:none;
+padding:12px;
+width:100%;
+border-radius:8px;
+font-size:17px;
+cursor:pointer;
+transition:.3s;
+}
+
+button:hover{
+transform:scale(1.05);
+background:linear-gradient(90deg,#178a55,#1fa463);
+}
+
+footer{
+margin-top:18px;
+font-size:13px;
+color:#777;
+}
+</style>
 </head>
+
 <body>
 
-<h2>Upload Reports</h2>
+<div class="box">
+
+<h2>Agent Performance Dashboard</h2>
+<p>Please upload reports to generate dashboard</p>
 
 <form method="post" action="/process" enctype="multipart/form-data">
-<p>Agent Performance Report</p>
+
+<label>Agent Performance Report</label>
 <input type="file" name="agent" required>
 
-<p>CDR Report</p>
+<label>CDR Report</label>
 <input type="file" name="cdr" required>
 
-<br><br>
 <button>Generate Dashboard</button>
+
 </form>
+
+<footer>Powered by Chandan Malakar</footer>
+
+</div>
 
 </body>
 </html>
