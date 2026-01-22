@@ -6,6 +6,7 @@ from datetime import datetime
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
+# ---------- TIME HELPERS ----------
 def fix_time(x):
     if pd.isna(x) or str(x).strip().lower() in ["-","nan",""]:
         return "00:00:00"
@@ -28,6 +29,7 @@ def stime(s):
 def is_red_netlogin(total_login, net_login):
     return tsec(total_login) > tsec("08:15:00") and tsec(net_login) < tsec("08:00:00")
 
+# ---------- ROUTES ----------
 @app.route("/")
 def upload():
     return render_template("upload.html")
@@ -79,24 +81,24 @@ def process():
     final["AHT"]=(final["Total Talk Time"].apply(tsec)/final["Total Call"].replace(0,1)).astype(int).apply(stime)
 
     final = final[final["Agent Name"].notna()]
-    final = final[~final["Agent Name"].astype(str).str.lower().isin(["nan","agent name","aht"])]
 
-    # 🔴 Highlight flags
-    final["__red_net"] = final.apply(lambda r: is_red_netlogin(r["Total Login Time"], r["Total Net Login"]), axis=1)
-    final["__red_break"] = final["Total Break"].apply(lambda x: tsec(x) > tsec("00:40:00"))
-    final["__red_meet"] = final["Total Meeting"].apply(lambda x: tsec(x) > tsec("00:30:00"))
+    # 🔴 HIGHLIGHT FLAGS
+    final["__red_net"]=final.apply(lambda r: is_red_netlogin(r["Total Login Time"],r["Total Net Login"]),axis=1)
+    final["__red_break"]=final["Total Break"].apply(lambda x: tsec(x)>tsec("00:40:00"))
+    final["__red_meet"]=final["Total Meeting"].apply(lambda x: tsec(x)>tsec("00:30:00"))
 
     total_talk_sec = final["Total Talk Time"].apply(tsec).sum()
     total_call = int(final["Total Call"].sum())
 
-    gt={}
-    gt["TOTAL IVR HIT"]=int(cdr[cdr[camp].str.upper()=="CSRINBOUND"].shape[0])
-    gt["TOTAL MATURE"]=total_call
-    gt["IB MATURE"]=int(final["IB Mature"].sum())
-    gt["OB MATURE"]=int(final["OB Mature"].sum())
-    gt["TOTAL TALK TIME"]=stime(total_talk_sec)
-    gt["AHT"]=stime(int(total_talk_sec/max(1,total_call)))
-    gt["LOGIN COUNT"]=int(final["Agent Name"].count())
+    gt={
+        "TOTAL IVR HIT":int(cdr[cdr[camp].str.upper()=="CSRINBOUND"].shape[0]),
+        "TOTAL MATURE":total_call,
+        "IB MATURE":int(final["IB Mature"].sum()),
+        "OB MATURE":int(final["OB Mature"].sum()),
+        "TOTAL TALK TIME":stime(total_talk_sec),
+        "AHT":stime(int(total_talk_sec/max(1,total_call))),
+        "LOGIN COUNT":int(final["Agent Name"].count())
+    }
 
     final = final[[
     "Agent Name","Agent Full Name","Total Login Time","Total Net Login",
@@ -131,9 +133,9 @@ def export():
         cell=wb.add_format({"border":1,"align":"center"})
         red=wb.add_format({"border":1,"align":"center","font_color":"red","bold":True})
 
-        for col in range(len(excel.columns)):
-            ws.write(0,col,excel.columns[col],header)
-            ws.set_column(col,col,22)
+        for c in range(len(excel.columns)):
+            ws.write(0,c,excel.columns[c],header)
+            ws.set_column(c,c,22)
 
         for r in range(len(excel)):
             for c in range(len(excel.columns)):
@@ -144,9 +146,8 @@ def export():
                 ws.write(r+1,c,excel.iloc[r,c],fmt)
 
     out.seek(0)
-    now=datetime.now().strftime("%d-%m-%y %H-%M-%S")
-    fname=f"Agent_Performance_Report_{now}.xlsx"
+    fname=f"Agent_Performance_Report_{datetime.now().strftime('%d-%m-%y %H-%M-%S')}.xlsx"
     return send_file(out,download_name=fname,as_attachment=True)
 
 if __name__=="__main__":
-    app.run(debug=True)
+    app.run()
