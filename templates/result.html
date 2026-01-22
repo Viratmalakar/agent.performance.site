@@ -1,49 +1,28 @@
-<!DOCTYPE html>
-<html>
-<head>
-<title>Agent Performance Dashboard</title>
-<link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
-</head>
-<body>
-
-<h2>Agent Performance Dashboard</h2>
-
-<table border="1" cellpadding="6" cellspacing="0" width="100%">
-<thead>
-<tr>
-<th>Agent Name</th>
-<th>Agent Full Name</th>
-<th>Total Login Time</th>
-<th>Total Net Login</th>
-<th>Total Break</th>
-<th>Total Meeting</th>
-<th>AHT</th>
-<th>Total Call</th>
-<th>IB Mature</th>
-<th>OB Mature</th>
-</tr>
-</thead>
-
 <tbody>
 {% for r in data %}
-<tr style="{% if r['__red_net'] or r['__red_break'] or r['__red_meet'] %}background:#ffe6e6;color:red;font-weight:bold{% endif %}">
+<tr>
+
 <td>{{r["Agent Name"]}}</td>
 <td>{{r["Agent Full Name"]}}</td>
 <td>{{r["Total Login Time"]}}</td>
-<td>{{r["Total Net Login"]}}</td>
-<td>{{r["Total Break"]}}</td>
-<td>{{r["Total Meeting"]}}</td>
+
+<td style="{% if r['__red_net'] %}color:red;font-weight:bold{% endif %}">
+{{r["Total Net Login"]}}
+</td>
+
+<td style="{% if r['__red_break'] %}color:red;font-weight:bold{% endif %}">
+{{r["Total Break"]}}
+</td>
+
+<td style="{% if r['__red_meet'] %}color:red;font-weight:bold{% endif %}">
+{{r["Total Meeting"]}}
+</td>
+
 <td>{{r["AHT"]}}</td>
 <td>{{r["Total Call"]}}</td>
 <td>{{r["IB Mature"]}}</td>
 <td>{{r["OB Mature"]}}</td>
+
 </tr>
 {% endfor %}
 </tbody>
-</table>
-
-<br>
-<a href="/export">Download Excel</a>
-
-</body>
-</html>
