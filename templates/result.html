@@ -2,72 +2,14 @@
 <html>
 <head>
 <title>Agent Performance Dashboard</title>
-<link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
 <style>
-body{
-font-family:Segoe UI;
-background:#f4fff6;
-margin:0;
-}
+body{font-family:Arial;background:#f2fff6}
+h2{text-align:center;color:#1fa463}
 
-header{
-background:#1fa463;
-color:white;
-padding:18px;
-text-align:center;
-font-size:26px;
-font-weight:bold;
-}
-
-.cards{
-display:grid;
-grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
-gap:15px;
-padding:20px;
-}
-
-.card{
-background:white;
-padding:15px;
-border-left:6px solid #1fa463;
-border-radius:10px;
-box-shadow:0 2px 8px rgba(0,0,0,.1);
-text-align:center;
-}
-
-.card h4{margin:0;color:#555}
-.card h2{margin:6px 0;color:#1fa463}
-
-.table-box{
-padding:20px;
-}
-
-table{
-width:100%;
-border-collapse:collapse;
-}
-
-th{
-background:#1fa463;
-color:white;
-padding:10px;
-border:1px solid #ddd;
-position:sticky;
-top:0;
-}
-
-td{
-padding:8px;
-border:1px solid #ddd;
-text-align:center;
-}
-
-tbody tr:hover{
-background:#e9fff5;
-}
+table{width:100%;border-collapse:collapse}
+th{background:#1fa463;color:white;padding:10px}
+td{padding:8px;text-align:center;border:1px solid #ddd}
 
 .redcell{
 background:#ffdddd;
@@ -75,55 +17,26 @@ color:navy;
 font-weight:bold;
 }
 
-.buttons{
-text-align:center;
-margin:20px;
-}
-
-button{
-background:#1fa463;
-color:white;
-border:none;
-padding:10px 18px;
-border-radius:6px;
-font-size:15px;
-margin:5px;
-cursor:pointer;
-}
-
-button:hover{
-background:#178a55;
-}
-
-/* DARK MODE */
-.dark body{background:#111;color:white;}
-.dark header{background:#222;}
-.dark .card{background:#222;color:white;}
-.dark table{color:white;}
-.dark th{background:#333;}
-.dark td{border-color:#444;}
+.cards{display:flex;gap:15px;flex-wrap:wrap;margin:15px}
+.card{background:#1fa463;color:white;padding:10px 20px;border-radius:8px}
 </style>
 </head>
 
 <body>
 
-<header>Agent Performance Dashboard</header>
+<h2>Agent Performance Dashboard</h2>
 
-<!-- 🔹 GRAND TOTAL CARDS -->
 <div class="cards">
-<div class="card"><h4>TOTAL IVR HIT</h4><h2>{{gt["TOTAL IVR HIT"]}}</h2></div>
-<div class="card"><h4>TOTAL MATURE</h4><h2>{{gt["TOTAL MATURE"]}}</h2></div>
-<div class="card"><h4>IB MATURE</h4><h2>{{gt["IB MATURE"]}}</h2></div>
-<div class="card"><h4>OB MATURE</h4><h2>{{gt["OB MATURE"]}}</h2></div>
-<div class="card"><h4>TOTAL TALK TIME</h4><h2>{{gt["TOTAL TALK TIME"]}}</h2></div>
-<div class="card"><h4>AHT</h4><h2>{{gt["AHT"]}}</h2></div>
-<div class="card"><h4>LOGIN COUNT</h4><h2>{{gt["LOGIN COUNT"]}}</h2></div>
+<div class="card">TOTAL IVR HIT<br>{{gt["TOTAL IVR HIT"]}}</div>
+<div class="card">TOTAL MATURE<br>{{gt["TOTAL MATURE"]}}</div>
+<div class="card">IB MATURE<br>{{gt["IB MATURE"]}}</div>
+<div class="card">OB MATURE<br>{{gt["OB MATURE"]}}</div>
+<div class="card">TOTAL TALK<br>{{gt["TOTAL TALK TIME"]}}</div>
+<div class="card">AHT<br>{{gt["AHT"]}}</div>
+<div class="card">LOGIN COUNT<br>{{gt["LOGIN COUNT"]}}</div>
 </div>
 
-<!-- 🔹 TABLE -->
-<div class="table-box" id="tableArea">
 <table>
-<thead>
 <tr>
 <th>Agent Name</th>
 <th>Agent Full Name</th>
@@ -136,9 +49,7 @@ background:#178a55;
 <th>IB Mature</th>
 <th>OB Mature</th>
 </tr>
-</thead>
 
-<tbody>
 {% for r in data %}
 <tr>
 <td>{{r["Agent Name"]}}</td>
@@ -163,32 +74,7 @@ background:#178a55;
 <td>{{r["OB Mature"]}}</td>
 </tr>
 {% endfor %}
-</tbody>
 </table>
-</div>
-
-<!-- 🔹 BUTTONS -->
-<div class="buttons">
-<button onclick="copyImage()">Copy Table</button>
-<button onclick="location.href='/export'">Export Excel</button>
-<button onclick="toggleDark()">Dark Theme</button>
-<button onclick="location.href='/'">Reset</button>
-</div>
-
-<script>
-function copyImage(){
-html2canvas(document.getElementById("tableArea"),{scale:2}).then(c=>{
-c.toBlob(b=>{
-navigator.clipboard.write([new ClipboardItem({"image/png":b})]);
-alert("Table copied as image");
-});
-});
-}
-
-function toggleDark(){
-document.documentElement.classList.toggle("dark");
-}
-</script>
 
 </body>
 </html>
