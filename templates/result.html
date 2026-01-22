@@ -1,3 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Agent Performance Dashboard</title>
+<link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+
+<style>
+body{
+font-family:Segoe UI;
+background:#f4fff6;
+margin:20px;
+}
+
+h2{
+color:#1fa463;
+text-align:center;
+}
+
+table{
+width:100%;
+border-collapse:collapse;
+margin-top:20px;
+}
+
+th{
+background:#1fa463;
+color:white;
+padding:8px;
+border:1px solid #ddd;
+position:sticky;
+top:0;
+}
+
+td{
+padding:7px;
+border:1px solid #ddd;
+text-align:center;
+}
+
+tbody tr:hover{
+background:#e9fff5;
+}
+</style>
+</head>
+
+<body>
+
+<h2>Agent Performance Dashboard</h2>
+
+<table>
+<thead>
+<tr>
+<th>Agent Name</th>
+<th>Agent Full Name</th>
+<th>Total Login Time</th>
+<th>Total Net Login</th>
+<th>Total Break</th>
+<th>Total Meeting</th>
+<th>AHT</th>
+<th>Total Call</th>
+<th>IB Mature</th>
+<th>OB Mature</th>
+</tr>
+</thead>
+
 <tbody>
 {% for r in data %}
 <tr>
@@ -26,3 +91,13 @@
 </tr>
 {% endfor %}
 </tbody>
+</table>
+
+<br><br>
+<div style="text-align:center;">
+<a href="/export">⬇ Download Excel</a> |
+<a href="/">🔄 Reset</a>
+</div>
+
+</body>
+</html>
