@@ -1,12 +1,14 @@
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template, request, redirect, url_for, session, send_file
 import pandas as pd
+import io
+from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = "agentdashboard"
 
 def tsec(t):
     try:
-        h,m,s = map(int,str(t).split(":"))
+        h,m,s=map(int,str(t).split(":"))
         return h*3600+m*60+s
     except:
         return 0
@@ -33,11 +35,8 @@ def process():
     full=agent.columns[2]
     login=agent.columns[3]
     talk=agent.columns[5]
-    t=agent.columns[19]
-    u=agent.columns[20]
-    w=agent.columns[22]
-    x=agent.columns[23]
-    y=agent.columns[24]
+    t=agent.columns[19]; u=agent.columns[20]
+    w=agent.columns[22]; x=agent.columns[23]; y=agent.columns[24]
 
     c_emp=cdr.columns[1]
     camp=cdr.columns[6]
@@ -49,8 +48,11 @@ def process():
     mature_cnt=mature.groupby(c_emp).size()
     ib_cnt=ib.groupby(c_emp).size()
 
+    mature_cnt.index=mature_cnt.index.astype(str).str.strip()
+    ib_cnt.index=ib_cnt.index.astype(str).str.strip()
+
     final=pd.DataFrame()
-    final["Agent Name"]=agent[emp]
+    final["Agent Name"]=agent[emp].astype(str).str.strip()
     final["Agent Full Name"]=agent[full]
     final["Total Login Time"]=agent[login]
 
@@ -63,33 +65,26 @@ def process():
     final["IB Mature"]=final["Agent Name"].map(ib_cnt).fillna(0).astype(int)
     final["OB Mature"]=final["Total Call"]-final["IB Mature"]
 
-    # --- Highlight Flags ---
+    # Highlight rules
     final["__red_net"]=(final["Total Net Login"].apply(tsec)<8*3600) & (final["Total Login Time"].apply(tsec)>8*3600+15*60)
     final["__red_break"]=final["Total Break"].apply(tsec)>40*60
     final["__red_meet"]=final["Total Meeting"].apply(tsec)>35*60
 
-    final=final[[
-        "Agent Name","Agent Full Name","Total Login Time","Total Net Login",
-        "Total Break","Total Meeting","AHT","Total Call","IB Mature","OB Mature",
-        "__red_net","__red_break","__red_meet"
-    ]]
+    session["data"]=final.to_dict(orient="records")
 
     gt={}
-    gt["TOTAL IVR HIT"]=int(len(cdr))
+    gt["TOTAL IVR HIT"]=len(cdr)
     gt["TOTAL MATURE"]=int(final["Total Call"].sum())
     gt["IB MATURE"]=int(final["IB Mature"].sum())
     gt["OB MATURE"]=int(final["OB Mature"].sum())
     gt["TOTAL TALK TIME"]=stime(agent[talk].apply(tsec).sum())
     gt["AHT"]=stime(int(agent[talk].apply(tsec).sum()/max(1,gt["TOTAL MATURE"])))
-    gt["LOGIN COUNT"]=int(len(final))
+    gt["LOGIN COUNT"]=len(final)
 
-    session["data"]=final.to_dict(orient="records")
     session["gt"]=gt
 
     return redirect(url_for("result"))
 
 @app.route("/result")
 def result():
-    if "data" not in session or "gt" not in session:
-        return redirect(url_for("upload"))
     return render_template("result.html",data=session["data"],gt=session["gt"])
