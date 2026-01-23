@@ -1,7 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, session, send_file
 import pandas as pd
 import io
-from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = "agentdashboard"
@@ -15,6 +14,7 @@ def tsec(t):
         return 0
 
 def stime(sec):
+    sec = int(max(0, sec))
     h = sec // 3600
     m = (sec % 3600) // 60
     s = sec % 60
@@ -28,16 +28,16 @@ def upload():
 @app.route("/process", methods=["POST"])
 def process():
 
-    agent = pd.read_excel(request.files["agent"])
-    cdr = pd.read_excel(request.files["cdr"])
+    agent = pd.read_excel(request.files["agent"], engine="openpyxl")
+    cdr   = pd.read_excel(request.files["cdr"], engine="openpyxl")
 
     agent = agent.fillna("00:00:00").replace("-", "00:00:00")
 
-    # ---- COLUMN MAP (AS PER NGUCC) ----
-    emp = agent.columns[1]
-    full = agent.columns[2]
+    # ---- COLUMN MAP (NGUCC STANDARD) ----
+    emp   = agent.columns[1]
+    full  = agent.columns[2]
     login = agent.columns[3]
-    talk = agent.columns[5]
+    talk  = agent.columns[5]
 
     t = agent.columns[19]
     u = agent.columns[20]
@@ -46,48 +46,47 @@ def process():
     y = agent.columns[24]
 
     c_emp = cdr.columns[1]
-    camp = cdr.columns[6]
-    disp = cdr.columns[25]
+    camp  = cdr.columns[6]
+    disp  = cdr.columns[25]
 
     # ---- CDR CALC ----
     cdr[disp] = cdr[disp].astype(str)
     cdr[camp] = cdr[camp].astype(str)
 
     mature = cdr[cdr[disp].str.contains("callmature|transfer", case=False, na=False)]
-    ib = mature[mature[camp].str.upper() == "CSRINBOUND"]
+    ib     = mature[mature[camp].str.upper() == "CSRINBOUND"]
 
     mature_cnt = mature.groupby(c_emp).size()
-    ib_cnt = ib.groupby(c_emp).size()
+    ib_cnt     = ib.groupby(c_emp).size()
 
     mature_cnt.index = mature_cnt.index.astype(str).str.strip()
-    ib_cnt.index = ib_cnt.index.astype(str).str.strip()
+    ib_cnt.index     = ib_cnt.index.astype(str).str.strip()
 
     # ---- MAIN TABLE ----
     final = pd.DataFrame()
-    final["Agent Name"] = agent[emp].astype(str).str.strip()
+    final["Agent Name"]      = agent[emp].astype(str).str.strip()
     final["Agent Full Name"] = agent[full]
     final["Total Login Time"] = agent[login]
 
-    # FAST CALC
-    break_sec = agent[[t, w, y]].applymap(tsec).sum(axis=1)
-    meet_sec = agent[[u, x]].applymap(tsec).sum(axis=1)
-    login_sec = agent[login].apply(tsec)
+    # ---- FAST CALC (PANDAS 3 SAFE) ----
+    break_sec = agent[[t, w, y]].apply(lambda col: col.map(tsec)).sum(axis=1)
+    meet_sec  = agent[[u, x]].apply(lambda col: col.map(tsec)).sum(axis=1)
+    login_sec = agent[login].map(tsec)
 
-    final["Total Break"] = break_sec.apply(stime)
-    final["Total Meeting"] = meet_sec.apply(stime)
-    final["Total Net Login"] = (login_sec - break_sec).apply(stime)
-    final["AHT"] = agent[talk]
+    final["Total Break"]     = break_sec.map(stime)
+    final["Total Meeting"]  = meet_sec.map(stime)
+    final["Total Net Login"] = (login_sec - break_sec).map(stime)
+    final["AHT"]            = agent[talk]
 
     final["Total Call"] = final["Agent Name"].map(mature_cnt).fillna(0).astype(int)
-    final["IB Mature"] = final["Agent Name"].map(ib_cnt).fillna(0).astype(int)
-    final["OB Mature"] = final["Total Call"] - final["IB Mature"]
+    final["IB Mature"]  = final["Agent Name"].map(ib_cnt).fillna(0).astype(int)
+    final["OB Mature"]  = final["Total Call"] - final["IB Mature"]
 
-    # ---- CLEAN BAD ROWS ----
+    # ---- CLEAN BAD / HEADER / ZERO ROWS ----
     final = final[final["Agent Name"].notna()]
     final = final[~final["Agent Name"].str.lower().isin(
         ["agent name", "emp id", "nan", "none", "0"]
     )]
-
     final = final[~(
         (final["Total Login Time"] == "00:00:00") &
         (final["Total Net Login"] == "00:00:00") &
@@ -96,9 +95,9 @@ def process():
     )]
 
     # ---- HIGHLIGHT FLAGS ----
-    final["__red_net"] = (login_sec > (8*3600 + 15*60)) & (login_sec - break_sec < 8*3600)
+    final["__red_net"]   = (login_sec > (8*3600 + 15*60)) & ((login_sec - break_sec) < 8*3600)
     final["__red_break"] = break_sec > 40*60
-    final["__red_meet"] = meet_sec > 35*60
+    final["__red_meet"]  = meet_sec  > 35*60
 
     # ---- GRAND TOTAL ----
     gt = {
@@ -106,13 +105,13 @@ def process():
         "TOTAL MATURE": int(final["Total Call"].sum()),
         "IB MATURE": int(final["IB Mature"].sum()),
         "OB MATURE": int(final["OB Mature"].sum()),
-        "TOTAL TALK TIME": stime(agent[talk].apply(tsec).sum()),
-        "AHT": stime(int(agent[talk].apply(tsec).sum() / max(1, final["Total Call"].sum()))),
+        "TOTAL TALK TIME": stime(agent[talk].map(tsec).sum()),
+        "AHT": stime(int(agent[talk].map(tsec).sum() / max(1, final["Total Call"].sum()))),
         "LOGIN COUNT": int(len(final))
     }
 
     session["data"] = final.to_dict(orient="records")
-    session["gt"] = gt
+    session["gt"]   = gt
 
     return redirect(url_for("result"))
 
@@ -124,7 +123,6 @@ def result():
 
 @app.route("/export")
 def export():
-
     if "data" not in session:
         return redirect(url_for("upload"))
 
@@ -142,10 +140,7 @@ def export():
             "bold": True, "bg_color": "#065f46",
             "color": "white", "border": 1, "align": "center"
         })
-
-        cell = wb.add_format({
-            "border": 1, "align": "center"
-        })
+        cell = wb.add_format({"border": 1, "align": "center"})
 
         for col in range(len(df.columns)):
             ws.write(0, col, df.columns[col], header)
