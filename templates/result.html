@@ -1,17 +1,35 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Dashboard</title>
+<title>Agent Performance Dashboard</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
 <style>
-body{font-family:Segoe UI;background:#ecfdf5}
+body{
+  font-family:Segoe UI;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(6,95,70,0.08), transparent 40%),
+    radial-gradient(circle at 80% 80%, rgba(16,185,129,0.08), transparent 40%),
+    linear-gradient(180deg, #ecfdf5, #f0fdfa);
+}
+
 header{text-align:center;font-size:26px;color:#065f46;padding:15px}
 
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;padding:15px}
-.card{background:#065f46;color:white;padding:12px;border-radius:10px;text-align:center}
+.cards{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+  gap:10px;
+  padding:15px
+}
+.card{
+  background:#065f46;
+  color:white;
+  padding:12px;
+  border-radius:10px;
+  text-align:center
+}
 
-.search{margin:10px;text-align:center}
+.search{text-align:center;margin:10px}
 input{padding:8px;width:300px}
 
 .table-box{margin:15px;background:white;border-radius:12px;padding:10px}
@@ -24,7 +42,10 @@ td{padding:6px;border-bottom:1px solid #ddd;text-align:center}
 .redcell{background:#ffdddd;color:navy;font-weight:bold}
 
 .buttons{text-align:center;margin:15px}
-button{background:#065f46;color:white;border:none;padding:10px 18px;border-radius:8px;margin:5px}
+button{
+  background:#065f46;color:white;border:none;
+  padding:10px 18px;border-radius:8px;margin:5px
+}
 </style>
 </head>
 
@@ -79,20 +100,25 @@ button{background:#065f46;color:white;border:none;padding:10px 18px;border-radiu
 
 <script>
 function filterTable(){
-let v=document.getElementById("search").value.toLowerCase();
-document.querySelectorAll("#table tr").forEach((r,i)=>{
-if(i===0)return;
-r.style.display=r.cells[1].innerText.toLowerCase().includes(v)?"":"none";
-});
+  let v=document.getElementById("search").value.toLowerCase();
+  document.querySelectorAll("#table tr").forEach((r,i)=>{
+    if(i===0)return;
+    r.style.display=r.cells[1].innerText.toLowerCase().includes(v)?"":"none";
+  });
 }
 
 function copyImage(){
-html2canvas(document.getElementById("tableArea"),{scale:2}).then(c=>{
-c.toBlob(b=>{
-navigator.clipboard.write([new ClipboardItem({"image/png":b})]);
-alert("Table copied");
-});
-});
+  const scroll = document.querySelector(".scroll");
+  const old = scroll.style.maxHeight;
+  scroll.style.maxHeight = "none";
+
+  html2canvas(document.getElementById("tableArea"),{scale:2}).then(c=>{
+    scroll.style.maxHeight = old;
+    c.toBlob(b=>{
+      navigator.clipboard.write([new ClipboardItem({"image/png":b})]);
+      alert("Full table copied");
+    });
+  });
 }
 </script>
 
