@@ -47,13 +47,13 @@ def process():
 
     # ---- CDR COLUMNS ----
     c_emp = cdr.columns[1]
-    camp  = cdr.columns[6]   # G column (CSRINBOUND)
+    camp  = cdr.columns[6]
     disp  = cdr.columns[25]
 
     cdr[camp] = cdr[camp].astype(str)
     cdr[disp] = cdr[disp].astype(str)
 
-    # ---- IVR HIT (CSRINBOUND COUNT) ----
+    # ---- IVR HIT ----
     ivr_hit = cdr[cdr[camp].str.upper() == "CSRINBOUND"].shape[0]
 
     # ---- MATURE CALLS ----
@@ -72,19 +72,27 @@ def process():
     final["Agent Full Name"] = agent[full]
     final["Total Login Time"] = agent[login]
 
-    # ---- FAST TIME CALC (PANDAS SAFE) ----
+    # ---- FAST TIME CALC ----
     break_sec = agent[[t, w, y]].apply(lambda col: col.map(tsec)).sum(axis=1)
     meet_sec  = agent[[u, x]].apply(lambda col: col.map(tsec)).sum(axis=1)
     login_sec = agent[login].map(tsec)
+    talk_sec  = agent[talk].map(tsec)
 
     final["Total Break"] = break_sec.map(stime)
     final["Total Meeting"] = meet_sec.map(stime)
     final["Total Net Login"] = (login_sec - break_sec).map(stime)
-    final["AHT"] = agent[talk]
 
+    # ---- CALL COUNTS ----
     final["Total Call"] = final["Agent Name"].map(mature_cnt).fillna(0).astype(int)
     final["IB Mature"] = final["Agent Name"].map(ib_cnt).fillna(0).astype(int)
     final["OB Mature"] = final["Total Call"] - final["IB Mature"]
+
+    # ---- ✅ AHT FIX (TOTAL TALK TIME / TOTAL CALLS) ----
+    call_cnt = final["Total Call"]
+    final["AHT"] = [
+        stime(t / c) if c > 0 else "00:00:00"
+        for t, c in zip(talk_sec, call_cnt)
+    ]
 
     # ---- REMOVE BAD ROWS ----
     final = final[final["Agent Name"].notna()]
@@ -109,8 +117,8 @@ def process():
         "TOTAL MATURE": int(final["Total Call"].sum()),
         "IB MATURE": int(final["IB Mature"].sum()),
         "OB MATURE": int(final["OB Mature"].sum()),
-        "TOTAL TALK TIME": stime(agent[talk].map(tsec).sum()),
-        "AHT": stime(int(agent[talk].map(tsec).sum() / max(1, final["Total Call"].sum()))),
+        "TOTAL TALK TIME": stime(talk_sec.sum()),
+        "AHT": stime(int(talk_sec.sum() / max(1, final["Total Call"].sum()))),
         "LOGIN COUNT": int(len(final))
     }
 
@@ -133,7 +141,6 @@ def export():
 
     df = pd.DataFrame(session["data"])
 
-    # ---- SAME SEQUENCE AS WEB ----
     df = df[[
         "Agent Name","Agent Full Name","Total Login Time","Total Net Login",
         "Total Break","Total Meeting","AHT",
@@ -157,7 +164,6 @@ def export():
             ws.write(0, col, df.columns[col], header)
             ws.set_column(col, col, 22)
 
-        # 🔥 BORDER ONLY WHERE DATA EXISTS
         for r in range(1, len(df) + 1):
             for c in range(len(df.columns)):
                 ws.write(r, c, df.iloc[r-1, c], cell)
