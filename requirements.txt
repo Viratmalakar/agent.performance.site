@@ -1,5 +1,5 @@
-flask
-pandas
-openpyxl
-gunicorn
-xlsxwriter
+flask>=2.3
+gunicorn>=21
+openpyxl>=3.1
+xlsxwriter>=3.1
+pandas>=2.2,<3.0
