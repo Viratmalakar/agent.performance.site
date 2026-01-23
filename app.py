@@ -33,7 +33,7 @@ def process():
 
     agent = agent.fillna("00:00:00").replace("-", "00:00:00")
 
-    # ---- COLUMN MAP (NGUCC STANDARD) ----
+    # ---- AGENT COLUMNS ----
     emp   = agent.columns[1]
     full  = agent.columns[2]
     login = agent.columns[3]
@@ -45,14 +45,18 @@ def process():
     x = agent.columns[23]
     y = agent.columns[24]
 
+    # ---- CDR COLUMNS ----
     c_emp = cdr.columns[1]
-    camp  = cdr.columns[6]
+    camp  = cdr.columns[6]   # G column (CSRINBOUND)
     disp  = cdr.columns[25]
 
-    # ---- CDR CALC ----
-    cdr[disp] = cdr[disp].astype(str)
     cdr[camp] = cdr[camp].astype(str)
+    cdr[disp] = cdr[disp].astype(str)
 
+    # ---- IVR HIT (CSRINBOUND COUNT) ----
+    ivr_hit = cdr[cdr[camp].str.upper() == "CSRINBOUND"].shape[0]
+
+    # ---- MATURE CALLS ----
     mature = cdr[cdr[disp].str.contains("callmature|transfer", case=False, na=False)]
     ib     = mature[mature[camp].str.upper() == "CSRINBOUND"]
 
@@ -62,27 +66,27 @@ def process():
     mature_cnt.index = mature_cnt.index.astype(str).str.strip()
     ib_cnt.index     = ib_cnt.index.astype(str).str.strip()
 
-    # ---- MAIN TABLE ----
+    # ---- FINAL TABLE ----
     final = pd.DataFrame()
-    final["Agent Name"]      = agent[emp].astype(str).str.strip()
+    final["Agent Name"] = agent[emp].astype(str).str.strip()
     final["Agent Full Name"] = agent[full]
     final["Total Login Time"] = agent[login]
 
-    # ---- FAST CALC (PANDAS 3 SAFE) ----
+    # ---- FAST TIME CALC (PANDAS SAFE) ----
     break_sec = agent[[t, w, y]].apply(lambda col: col.map(tsec)).sum(axis=1)
     meet_sec  = agent[[u, x]].apply(lambda col: col.map(tsec)).sum(axis=1)
     login_sec = agent[login].map(tsec)
 
-    final["Total Break"]     = break_sec.map(stime)
-    final["Total Meeting"]  = meet_sec.map(stime)
+    final["Total Break"] = break_sec.map(stime)
+    final["Total Meeting"] = meet_sec.map(stime)
     final["Total Net Login"] = (login_sec - break_sec).map(stime)
-    final["AHT"]            = agent[talk]
+    final["AHT"] = agent[talk]
 
     final["Total Call"] = final["Agent Name"].map(mature_cnt).fillna(0).astype(int)
-    final["IB Mature"]  = final["Agent Name"].map(ib_cnt).fillna(0).astype(int)
-    final["OB Mature"]  = final["Total Call"] - final["IB Mature"]
+    final["IB Mature"] = final["Agent Name"].map(ib_cnt).fillna(0).astype(int)
+    final["OB Mature"] = final["Total Call"] - final["IB Mature"]
 
-    # ---- CLEAN BAD / HEADER / ZERO ROWS ----
+    # ---- REMOVE BAD ROWS ----
     final = final[final["Agent Name"].notna()]
     final = final[~final["Agent Name"].str.lower().isin(
         ["agent name", "emp id", "nan", "none", "0"]
@@ -101,7 +105,7 @@ def process():
 
     # ---- GRAND TOTAL ----
     gt = {
-        "TOTAL IVR HIT": int(len(cdr)),
+        "TOTAL IVR HIT": int(ivr_hit),
         "TOTAL MATURE": int(final["Total Call"].sum()),
         "IB MATURE": int(final["IB Mature"].sum()),
         "OB MATURE": int(final["OB Mature"].sum()),
@@ -111,7 +115,7 @@ def process():
     }
 
     session["data"] = final.to_dict(orient="records")
-    session["gt"]   = gt
+    session["gt"] = gt
 
     return redirect(url_for("result"))
 
@@ -123,11 +127,18 @@ def result():
 
 @app.route("/export")
 def export():
+
     if "data" not in session:
         return redirect(url_for("upload"))
 
     df = pd.DataFrame(session["data"])
-    df = df.drop(columns=[c for c in df.columns if c.startswith("__")])
+
+    # ---- SAME SEQUENCE AS WEB ----
+    df = df[[
+        "Agent Name","Agent Full Name","Total Login Time","Total Net Login",
+        "Total Break","Total Meeting","AHT",
+        "Total Call","IB Mature","OB Mature"
+    ]]
 
     out = io.BytesIO()
     with pd.ExcelWriter(out, engine="xlsxwriter") as writer:
@@ -146,8 +157,10 @@ def export():
             ws.write(0, col, df.columns[col], header)
             ws.set_column(col, col, 22)
 
+        # 🔥 BORDER ONLY WHERE DATA EXISTS
         for r in range(1, len(df) + 1):
-            ws.set_row(r, None, cell)
+            for c in range(len(df.columns)):
+                ws.write(r, c, df.iloc[r-1, c], cell)
 
     out.seek(0)
     return send_file(out, as_attachment=True,
