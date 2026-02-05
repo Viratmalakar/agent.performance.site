@@ -110,6 +110,7 @@ def process():
     final["__red_net"]   = (login_sec > (8*3600 + 15*60)) & ((login_sec - break_sec) < 8*3600)
     final["__red_break"] = break_sec > 35*60
     final["__red_meet"]  = meet_sec  > 35*60
+    final["__red_net"] = (net_login_sec >= 8*3600) & (final["Total Call"] < 100)
 
     # ---- GRAND TOTAL ----
     gt = {
@@ -171,4 +172,5 @@ def export():
     out.seek(0)
     return send_file(out, as_attachment=True,
                      download_name="Agent_Performance_Dashboard.xlsx")
+
 
