@@ -1,241 +1,88 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<title>Agent Performance Dashboard</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <meta charset="UTF-8">
+    <title>Agent Performance Result</title>
 
-<style>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f2f4f7;
+            margin: 0;
+            padding: 0;
+        }
 
-body{
-  font-family:Segoe UI;
-  margin:0;
-  background:
-    radial-gradient(circle at 20% 20%, rgba(6,95,70,0.08), transparent 40%),
-    radial-gradient(circle at 80% 80%, rgba(16,185,129,0.08), transparent 40%),
-    linear-gradient(180deg, #ecfdf5, #f0fdfa);
-}
+        h2 {
+            text-align: center;
+            margin: 20px 0;
+        }
 
-/* ---------- HEADER ---------- */
-header{
-  text-align:center;
-  font-size:28px;
-  color:#065f46;
-  padding:18px;
-  font-weight:600;
-}
+        .table-container {
+            width: 98%;
+            margin: auto;
+            overflow-x: auto;
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
 
-/* ---------- CARDS ---------- */
-.cards{
-  display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
-  gap:14px;
-  padding:15px;
-}
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            min-width: 1200px;
+        }
 
-.card{
-  background:#065f46;
-  color:white;
-  padding:14px;
-  border-radius:12px;
-  text-align:center;
-  box-shadow:0 4px 10px rgba(0,0,0,0.15);
-  transition:0.3s;
-}
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+            font-size: 13px;
+            white-space: nowrap;
+        }
 
-.card:hover{
-  transform:translateY(-4px);
-  background:#047857;
-}
+        th {
+            background-color: #0d6efd;
+            color: #ffffff;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
 
-/* ---------- SEARCH ---------- */
-.search{
-  text-align:center;
-  margin:15px;
-}
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
 
-input{
-  padding:10px;
-  width:320px;
-  border-radius:8px;
-  border:1px solid #ccc;
-  font-size:14px;
-}
-
-/* ---------- TABLE ---------- */
-.table-box{
-  margin:15px;
-  background:white;
-  border-radius:14px;
-  padding:12px;
-  box-shadow:0 4px 14px rgba(0,0,0,0.1);
-}
-
-.scroll{
-  max-height:620px;
-  overflow:auto;
-}
-
-table{
-  width:100%;
-  border-collapse:collapse;
-  font-size:14px;
-}
-
-th{
-  background:#065f46;
-  color:white;
-  padding:10px;
-  position:sticky;
-  top:0;
-  z-index:2;
-}
-
-td{
-  padding:8px;
-  border-bottom:1px solid #eee;
-  text-align:center;
-}
-
-tr:hover{
-  background:#f0fdfa;
-}
-
-/* ---------- HIGHLIGHTS ---------- */
-.redcell{
-  background:#ffb3b3;
-  color:#7f0000;
-  font-weight:bold;
-  border-radius:6px;
-}
-
-/* ---------- BUTTONS ---------- */
-.buttons{
-  text-align:center;
-  margin:20px;
-}
-
-button{
-  background:#065f46;
-  color:white;
-  border:none;
-  padding:10px 20px;
-  border-radius:10px;
-  margin:6px;
-  font-size:14px;
-  cursor:pointer;
-  transition:0.3s;
-}
-
-button:hover{
-  background:#047857;
-  transform:scale(1.05);
-}
-
-</style>
+        tr:hover {
+            background-color: #eef3ff;
+        }
+    </style>
 </head>
 
 <body>
 
-<header>Agent Performance Dashboard</header>
+<h2>Agent Performance Dashboard</h2>
 
-<!-- ---------- SUMMARY CARDS ---------- -->
-<div class="cards">
-{% for k,v in gt.items() %}
-<div class="card">{{k}}<br><b>{{v}}</b></div>
-{% endfor %}
+<div class="table-container">
+    <table>
+        <thead>
+            <tr>
+                {% for col in columns %}
+                    <th>{{ col }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+
+        <tbody>
+            {% for row in data %}
+                <tr>
+                    {% for col in columns %}
+                        <td>{{ row[col] }}</td>
+                    {% endfor %}
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </div>
-
-<!-- ---------- SEARCH ---------- -->
-<div class="search">
-<input type="text" id="search" placeholder="Search Agent Full Name..." onkeyup="filterTable()">
-</div>
-
-<!-- ---------- TABLE ---------- -->
-<div class="table-box" id="tableArea">
-<div class="scroll">
-<table id="table">
-
-<tr>
-<th>Agent Name</th>
-<th>Agent Full Name</th>
-<th>Total Login Time</th>
-<th>Total Net Login</th>
-<th>Total Break</th>
-<th>Total Meeting</th>
-<th>AHT</th>
-<th>Total Call</th>
-<th>IB Mature</th>
-<th>OB Mature</th>
-</tr>
-
-{% for r in data %}
-<tr>
-
-<td>{{r["Agent Name"]}}</td>
-<td>{{r["Agent Full Name"]}}</td>
-<td>{{r["Total Login Time"]}}</td>
-
-<td>{{r["Total Net Login"]}}</td>
-
-<td class="{% if r['__red_break'] %}redcell{% endif %}">
-{{r["Total Break"]}}
-</td>
-
-<td class="{% if r['__red_meet'] %}redcell{% endif %}">
-{{r["Total Meeting"]}}
-</td>
-
-<td>{{r["AHT"]}}</td>
-
-<!-- ⭐ TOTAL CALL RED LOGIC -->
-<td class="{% if r['__red_call'] %}redcell{% endif %}">
-{{r["Total Call"]}}
-</td>
-
-<td>{{r["IB Mature"]}}</td>
-<td>{{r["OB Mature"]}}</td>
-
-</tr>
-{% endfor %}
-
-</table>
-</div>
-</div>
-
-<!-- ---------- BUTTONS ---------- -->
-<div class="buttons">
-<button onclick="copyImage()">Copy Table</button>
-<button onclick="location.href='/export'">Export Excel</button>
-<button onclick="location.href='/'">Reset</button>
-</div>
-
-<script>
-
-/* ---------- SEARCH FILTER ---------- */
-function filterTable(){
-  let v=document.getElementById("search").value.toLowerCase();
-  document.querySelectorAll("#table tr").forEach((r,i)=>{
-    if(i===0)return;
-    r.style.display=r.cells[1].innerText.toLowerCase().includes(v)?"":"none";
-  });
-}
-
-/* ---------- COPY FULL TABLE ---------- */
-function copyImage(){
-  const scroll = document.querySelector(".scroll");
-  const old = scroll.style.maxHeight;
-  scroll.style.maxHeight = "none";
-
-  html2canvas(document.getElementById("tableArea"),{scale:2}).then(c=>{
-    scroll.style.maxHeight = old;
-    c.toBlob(b=>{
-      navigator.clipboard.write([new ClipboardItem({"image/png":b})]);
-      alert("Full table copied");
-    });
-  });
-}
-
-</script>
 
 </body>
 </html>
