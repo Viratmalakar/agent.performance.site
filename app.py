@@ -1,36 +1,9 @@
 from flask import Flask, render_template, request
 import pandas as pd
-import os
 
 app = Flask(__name__)
 
-UPLOAD_FOLDER = "uploads"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
-
-# ---------- Time conversion ----------
-def time_to_seconds(t):
-    try:
-        if pd.isna(t):
-            return 0
-        h, m, s = map(int, str(t).split(":"))
-        return h * 3600 + m * 60 + s
-    except:
-        return 0
-
-
-def seconds_to_time(sec):
-    try:
-        h = sec // 3600
-        m = (sec % 3600) // 60
-        s = sec % 60
-        return f"{h:02}:{m:02}:{s:02}"
-    except:
-        return "00:00:00"
-
-
-# ---------- Routes ----------
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -38,66 +11,72 @@ def index():
 
 @app.route("/process", methods=["POST"])
 def process():
-    file = request.files.get("file")
+    agent_files = request.files.getlist("agent_files")
+    cdr_files   = request.files.getlist("cdr_files")
 
-    if not file:
-        return "No file uploaded"
+    agent_data = []
+    cdr_data = []
 
-    filepath = os.path.join(app.config["UPLOAD_FOLDER"], file.filename)
-    file.save(filepath)
+    # ---------- Agent Performance ----------
+    for file in agent_files:
+        if file.filename == "":
+            continue
 
-    # ---------- Read Excel ----------
-    df = pd.read_excel(filepath)
+        df = pd.read_excel(file)
+        df = df.iloc[2:].reset_index(drop=True)
+        df.replace("-", 0, inplace=True)
 
-    # ---------- Clean data ----------
-    df = df.iloc[2:].reset_index(drop=True)
-    df.replace("-", 0, inplace=True)
+        def to_sec(t):
+            try:
+                h, m, s = map(int, str(t).split(":"))
+                return h * 3600 + m * 60 + s
+            except:
+                return 0
 
-    time_cols = [
-        "Total Login",
-        "Lunch Break",
-        "Tea Break",
-        "Short Break",
-        "Meeting",
-        "System Down"
-    ]
+        def to_time(sec):
+            h = sec // 3600
+            m = (sec % 3600) // 60
+            s = sec % 60
+            return f"{h:02}:{m:02}:{s:02}"
 
-    for col in time_cols:
-        if col in df.columns:
-            df[col] = df[col].apply(time_to_seconds)
+        cols = [
+            "Total Login",
+            "Lunch Break",
+            "Tea Break",
+            "Short Break",
+            "Meeting",
+            "System Down"
+        ]
 
-    # ---------- Calculations ----------
-    if set(time_cols).issubset(df.columns):
-        df["Total Break"] = (
-            df["Lunch Break"] +
-            df["Tea Break"] +
-            df["Short Break"]
-        )
+        for c in cols:
+            if c in df.columns:
+                df[c] = df[c].apply(to_sec)
 
-        df["Total Meeting"] = (
-            df["Meeting"] +
-            df["System Down"]
-        )
+        df["Total Break"] = df["Lunch Break"] + df["Tea Break"] + df["Short Break"]
+        df["Total Meeting"] = df["Meeting"] + df["System Down"]
+        df["Net Login"] = df["Total Login"] - df["Total Break"]
 
-        df["Net Login"] = (
-            df["Total Login"] - df["Total Break"]
-        )
+        for c in ["Total Break", "Total Meeting", "Net Login"]:
+            df[c] = df[c].apply(to_time)
 
-    # ---------- Convert back to time ----------
-    convert_cols = ["Total Break", "Total Meeting", "Net Login"]
+        agent_data.append(df)
 
-    for col in convert_cols:
-        if col in df.columns:
-            df[col] = df[col].apply(seconds_to_time)
+    # ---------- CDR ----------
+    for file in cdr_files:
+        if file.filename == "":
+            continue
+        cdr_df = pd.read_excel(file)
+        cdr_data.append(cdr_df)
 
-    # ---------- Send to UI ----------
-    table_data = df.fillna("").to_dict(orient="records")
-    columns = df.columns.tolist()
+    final_agent_df = pd.concat(agent_data, ignore_index=True) if agent_data else pd.DataFrame()
+    final_cdr_df   = pd.concat(cdr_data, ignore_index=True) if cdr_data else pd.DataFrame()
 
+    # For now showing Agent Performance
     return render_template(
-        "dashboard.html",
-        columns=columns,
-        data=table_data
+        "result.html",
+        columns=final_agent_df.columns.tolist(),
+        data=final_agent_df.fillna("").to_dict(orient="records"),
+        cdr_rows=len(final_cdr_df)
     )
 
 
