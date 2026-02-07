@@ -9,74 +9,78 @@ def index():
     return render_template("index.html")
 
 
+# ---------- Time helpers ----------
+def to_sec(t):
+    try:
+        h, m, s = map(int, str(t).split(":"))
+        return h * 3600 + m * 60 + s
+    except:
+        return 0
+
+
+def to_time(sec):
+    try:
+        h = sec // 3600
+        m = (sec % 3600) // 60
+        s = sec % 60
+        return f"{h:02}:{m:02}:{s:02}"
+    except:
+        return "00:00:00"
+
+
 @app.route("/process", methods=["POST"])
 def process():
+
     agent_files = request.files.getlist("agent_files")
-    cdr_files   = request.files.getlist("cdr_files")
+    cdr_files   = request.files.getlist("cdr_files")  # future use
 
-    agent_data = []
-    cdr_data = []
+    frames = []
 
-    # ---------- Agent Performance ----------
     for file in agent_files:
         if file.filename == "":
             continue
 
+        # ---- Read Excel ----
         df = pd.read_excel(file)
+
+        # Remove top 2 junk rows
         df = df.iloc[2:].reset_index(drop=True)
-        df.replace("-", 0, inplace=True)
 
-        def to_sec(t):
-            try:
-                h, m, s = map(int, str(t).split(":"))
-                return h * 3600 + m * 60 + s
-            except:
-                return 0
+        # Replace '-' safely
+        df = df.replace("-", 0).infer_objects(copy=False)
 
-        def to_time(sec):
-            h = sec // 3600
-            m = (sec % 3600) // 60
-            s = sec % 60
-            return f"{h:02}:{m:02}:{s:02}"
+        # ==================================================
+        # 🔴 FIXED COLUMN MAPPING (EXCEL LETTER → INDEX)
+        # ==================================================
+        # A=0, B=1, C=2 ...
 
-        cols = [
-            "Total Login",
-            "Lunch Break",
-            "Tea Break",
-            "Short Break",
-            "Meeting",
-            "System Down"
-        ]
+        total_login = df.iloc[:, 3].apply(to_sec)    # D:D
+        lunch       = df.iloc[:, 19].apply(to_sec)   # T:T  (LUNCHBREAK)
+        tea         = df.iloc[:, 22].apply(to_sec)   # W:W
+        shortb      = df.iloc[:, 24].apply(to_sec)   # Y:Y
+        meeting     = df.iloc[:, 20].apply(to_sec)   # U:U
+        sysdown     = df.iloc[:, 23].apply(to_sec)   # X:X
 
-        for c in cols:
-            if c in df.columns:
-                df[c] = df[c].apply(to_sec)
+        # ---------- Calculations ----------
+        df["Total Break"]   = lunch + tea + shortb
+        df["Total Meeting"] = meeting + sysdown
+        df["Net Login"]     = total_login - df["Total Break"]
 
-        df["Total Break"] = df["Lunch Break"] + df["Tea Break"] + df["Short Break"]
-        df["Total Meeting"] = df["Meeting"] + df["System Down"]
-        df["Net Login"] = df["Total Login"] - df["Total Break"]
-
+        # ---------- Convert back to hh:mm:ss ----------
         for c in ["Total Break", "Total Meeting", "Net Login"]:
             df[c] = df[c].apply(to_time)
 
-        agent_data.append(df)
+        frames.append(df)
 
-    # ---------- CDR ----------
-    for file in cdr_files:
-        if file.filename == "":
-            continue
-        cdr_df = pd.read_excel(file)
-        cdr_data.append(cdr_df)
+    final_df = (
+        pd.concat(frames, ignore_index=True)
+        if frames else pd.DataFrame()
+    )
 
-    final_agent_df = pd.concat(agent_data, ignore_index=True) if agent_data else pd.DataFrame()
-    final_cdr_df   = pd.concat(cdr_data, ignore_index=True) if cdr_data else pd.DataFrame()
-
-    # For now showing Agent Performance
     return render_template(
         "result.html",
-        columns=final_agent_df.columns.tolist(),
-        data=final_agent_df.fillna("").to_dict(orient="records"),
-        cdr_rows=len(final_cdr_df)
+        columns=final_df.columns.tolist(),
+        data=final_df.fillna("").to_dict(orient="records")
     )
 
 
