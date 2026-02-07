@@ -1,41 +1,146 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>Upload Reports</title>
-<style>
-body{
-  margin:0;min-height:100vh;
-  display:flex;justify-content:center;align-items:center;
-  background:#f6f4fb;font-family:Segoe UI,sans-serif;
-}
-.card{
-  width:500px;background:#fff;padding:30px;
-  border-radius:20px;
-  box-shadow:0 15px 40px rgba(124,110,230,.25);
-}
-h2{color:#6a5acd}
-input,button{width:100%;margin-top:12px}
-button{
-  padding:12px;border:none;border-radius:14px;
-  background:#6a5acd;color:#fff;font-size:15px
-}
-</style>
-</head>
-<body>
+from flask import Flask, render_template, request
+import pandas as pd
 
-<div class="card">
-<h2>Upload Reports</h2>
-<form action="/process" method="post" enctype="multipart/form-data">
-  <label>Agent Performance</label>
-  <input type="file" name="agent_files" multiple required>
+app = Flask(__name__)
 
-  <label>CDR Report</label>
-  <input type="file" name="cdr_files" multiple>
+# ---------- helpers ----------
+def to_sec(t):
+    try:
+        h, m, s = map(int, str(t).split(":"))
+        return h * 3600 + m * 60 + s
+    except:
+        return 0
 
-  <button type="submit">Generate Dashboard</button>
-</form>
-</div>
 
-</body>
-</html>
+def to_time(sec):
+    try:
+        sec = int(sec)
+        h = sec // 3600
+        m = (sec % 3600) // 60
+        s = sec % 60
+        return f"{h:02}:{m:02}:{s:02}"
+    except:
+        return "00:00:00"
+
+
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+
+@app.route("/process", methods=["POST"])
+def process():
+
+    agent_files = request.files.getlist("agent_files")
+    cdr_files = request.files.getlist("cdr_files")
+
+    # ================= AGENT PERFORMANCE =================
+    agent_frames = []
+
+    for file in agent_files:
+        if not file.filename:
+            continue
+
+        df = pd.read_excel(file)
+        df = df.iloc[2:].reset_index(drop=True)
+        df = df.replace("-", 0).infer_objects(copy=False)
+
+        # Column mapping (LETTER BASED)
+        emp_id   = df.iloc[:, 1]          # B
+        name     = df.iloc[:, 2]          # C
+        login    = df.iloc[:, 3].apply(to_sec)   # D
+        talk     = df.iloc[:, 5].apply(to_sec)   # F
+        acw      = df.iloc[:, 7].apply(to_sec)   # H
+        lunch    = df.iloc[:, 19].apply(to_sec)  # T
+        meeting  = df.iloc[:, 20].apply(to_sec)  # U
+        shortb   = df.iloc[:, 22].apply(to_sec)  # W
+        sysdown  = df.iloc[:, 23].apply(to_sec)  # X
+        tea      = df.iloc[:, 24].apply(to_sec)  # Y
+
+        temp = pd.DataFrame({
+            "Employee ID": emp_id,
+            "Agent Name": name,
+            "Login": login,
+            "Talk": talk,
+            "ACW": acw,
+            "Lunch": lunch,
+            "Short": shortb,
+            "Tea": tea,
+            "Meeting": meeting + sysdown
+        })
+
+        agent_frames.append(temp)
+
+    ap = pd.concat(agent_frames, ignore_index=True)
+
+    ap = ap.groupby("Employee ID", as_index=False).agg({
+        "Agent Name": "first",
+        "Login": "sum",
+        "Talk": "sum",
+        "ACW": "sum",
+        "Lunch": "sum",
+        "Short": "sum",
+        "Tea": "sum",
+        "Meeting": "sum"
+    })
+
+    ap["Total Break"] = ap["Lunch"] + ap["Short"] + ap["Tea"]
+    ap["Net Login"] = ap["Login"] - ap["Total Break"]
+
+    # ================= CDR =================
+    cdr_frames = []
+
+    for file in cdr_files:
+        if not file.filename:
+            continue
+
+        cdr = pd.read_excel(file)
+        cdr = cdr.replace("-", 0).infer_objects(copy=False)
+
+        emp = cdr.iloc[:, 1]   # B
+        camp = cdr.iloc[:, 6]  # G
+        calls = cdr.iloc[:, 25]  # Z
+
+        temp = pd.DataFrame({
+            "Employee ID": emp,
+            "Campaign": camp,
+            "Calls": calls
+        })
+
+        cdr_frames.append(temp)
+
+    cdr = pd.concat(cdr_frames, ignore_index=True)
+
+    ib = cdr[cdr["Campaign"] == "CSRIBOUND"].groupby("Employee ID")["Calls"].sum()
+    ob = cdr[cdr["Campaign"] != "CSRIBOUND"].groupby("Employee ID")["Calls"].sum()
+
+    ap["IB Calls"] = ap["Employee ID"].map(ib).fillna(0).astype(int)
+    ap["OB Calls"] = ap["Employee ID"].map(ob).fillna(0).astype(int)
+    ap["Total Calls"] = ap["IB Calls"] + ap["OB Calls"]
+
+    ap["AHT"] = ap.apply(
+        lambda r: to_time(r["Talk"] / r["Total Calls"]) if r["Total Calls"] > 0 else "00:00:00",
+        axis=1
+    )
+
+    # Convert time back
+    for c in ["Login", "Net Login", "Talk", "ACW", "Total Break", "Meeting"]:
+        ap[c] = ap[c].apply(to_time)
+
+    final_cols = [
+        "Employee ID", "Agent Name", "Login", "Net Login",
+        "Talk", "ACW", "Total Break", "Meeting",
+        "IB Calls", "OB Calls", "Total Calls", "AHT"
+    ]
+
+    ap = ap[final_cols]
+
+    return render_template(
+        "result.html",
+        columns=ap.columns.tolist(),
+        data=ap.to_dict(orient="records")
+    )
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000)
