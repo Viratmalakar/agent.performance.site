@@ -5,47 +5,132 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
 <style>
+
 body{
   font-family:Segoe UI;
+  margin:0;
   background:
     radial-gradient(circle at 20% 20%, rgba(6,95,70,0.08), transparent 40%),
     radial-gradient(circle at 80% 80%, rgba(16,185,129,0.08), transparent 40%),
     linear-gradient(180deg, #ecfdf5, #f0fdfa);
 }
 
-header{text-align:center;font-size:26px;color:#065f46;padding:15px}
+/* ---------- HEADER ---------- */
+header{
+  text-align:center;
+  font-size:28px;
+  color:#065f46;
+  padding:18px;
+  font-weight:600;
+}
 
+/* ---------- CARDS ---------- */
 .cards{
   display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
-  gap:10px;
-  padding:15px
+  grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
+  gap:14px;
+  padding:15px;
 }
+
 .card{
   background:#065f46;
   color:white;
+  padding:14px;
+  border-radius:12px;
+  text-align:center;
+  box-shadow:0 4px 10px rgba(0,0,0,0.15);
+  transition:0.3s;
+}
+
+.card:hover{
+  transform:translateY(-4px);
+  background:#047857;
+}
+
+/* ---------- SEARCH ---------- */
+.search{
+  text-align:center;
+  margin:15px;
+}
+
+input{
+  padding:10px;
+  width:320px;
+  border-radius:8px;
+  border:1px solid #ccc;
+  font-size:14px;
+}
+
+/* ---------- TABLE ---------- */
+.table-box{
+  margin:15px;
+  background:white;
+  border-radius:14px;
   padding:12px;
-  border-radius:10px;
-  text-align:center
+  box-shadow:0 4px 14px rgba(0,0,0,0.1);
 }
 
-.search{text-align:center;margin:10px}
-input{padding:8px;width:300px}
+.scroll{
+  max-height:620px;
+  overflow:auto;
+}
 
-.table-box{margin:15px;background:white;border-radius:12px;padding:10px}
-.scroll{max-height:600px;overflow:auto}
+table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:14px;
+}
 
-table{width:100%;border-collapse:collapse}
-th{background:#065f46;color:white;padding:8px;position:sticky;top:0}
-td{padding:6px;border-bottom:1px solid #ddd;text-align:center}
+th{
+  background:#065f46;
+  color:white;
+  padding:10px;
+  position:sticky;
+  top:0;
+  z-index:2;
+}
 
-.redcell{background:#ffdddd;color:navy;font-weight:bold}
+td{
+  padding:8px;
+  border-bottom:1px solid #eee;
+  text-align:center;
+}
 
-.buttons{text-align:center;margin:15px}
+tr:hover{
+  background:#f0fdfa;
+}
+
+/* ---------- HIGHLIGHTS ---------- */
+.redcell{
+  background:#ffb3b3;
+  color:#7f0000;
+  font-weight:bold;
+  border-radius:6px;
+}
+
+/* ---------- BUTTONS ---------- */
+.buttons{
+  text-align:center;
+  margin:20px;
+}
+
 button{
-  background:#065f46;color:white;border:none;
-  padding:10px 18px;border-radius:8px;margin:5px
+  background:#065f46;
+  color:white;
+  border:none;
+  padding:10px 20px;
+  border-radius:10px;
+  margin:6px;
+  font-size:14px;
+  cursor:pointer;
+  transition:0.3s;
 }
+
+button:hover{
+  background:#047857;
+  transform:scale(1.05);
+}
+
 </style>
 </head>
 
@@ -53,45 +138,71 @@ button{
 
 <header>Agent Performance Dashboard</header>
 
+<!-- ---------- SUMMARY CARDS ---------- -->
 <div class="cards">
 {% for k,v in gt.items() %}
-<div class="card">{{k}}<br>{{v}}</div>
+<div class="card">{{k}}<br><b>{{v}}</b></div>
 {% endfor %}
 </div>
 
+<!-- ---------- SEARCH ---------- -->
 <div class="search">
 <input type="text" id="search" placeholder="Search Agent Full Name..." onkeyup="filterTable()">
 </div>
 
+<!-- ---------- TABLE ---------- -->
 <div class="table-box" id="tableArea">
 <div class="scroll">
 <table id="table">
+
 <tr>
-<th>Agent Name</th><th>Agent Full Name</th><th>Total Login Time</th>
-<th>Total Net Login</th><th>Total Break</th><th>Total Meeting</th>
-<th>AHT</th><th>Total Call</th><th>IB Mature</th><th>OB Mature</th>
+<th>Agent Name</th>
+<th>Agent Full Name</th>
+<th>Total Login Time</th>
+<th>Total Net Login</th>
+<th>Total Break</th>
+<th>Total Meeting</th>
+<th>AHT</th>
+<th>Total Call</th>
+<th>IB Mature</th>
+<th>OB Mature</th>
 </tr>
 
 {% for r in data %}
 <tr>
+
 <td>{{r["Agent Name"]}}</td>
 <td>{{r["Agent Full Name"]}}</td>
 <td>{{r["Total Login Time"]}}</td>
 
-<td class="{% if r['__red_net'] %}redcell{% endif %}">{{r["Total Net Login"]}}</td>
-<td class="{% if r['__red_break'] %}redcell{% endif %}">{{r["Total Break"]}}</td>
-<td class="{% if r['__red_meet'] %}redcell{% endif %}">{{r["Total Meeting"]}}</td>
+<td>{{r["Total Net Login"]}}</td>
+
+<td class="{% if r['__red_break'] %}redcell{% endif %}">
+{{r["Total Break"]}}
+</td>
+
+<td class="{% if r['__red_meet'] %}redcell{% endif %}">
+{{r["Total Meeting"]}}
+</td>
 
 <td>{{r["AHT"]}}</td>
-<td>{{r["Total Call"]}}</td>
+
+<!-- ⭐ TOTAL CALL RED LOGIC -->
+<td class="{% if r['__red_call'] %}redcell{% endif %}">
+{{r["Total Call"]}}
+</td>
+
 <td>{{r["IB Mature"]}}</td>
 <td>{{r["OB Mature"]}}</td>
+
 </tr>
 {% endfor %}
+
 </table>
 </div>
 </div>
 
+<!-- ---------- BUTTONS ---------- -->
 <div class="buttons">
 <button onclick="copyImage()">Copy Table</button>
 <button onclick="location.href='/export'">Export Excel</button>
@@ -99,6 +210,8 @@ button{
 </div>
 
 <script>
+
+/* ---------- SEARCH FILTER ---------- */
 function filterTable(){
   let v=document.getElementById("search").value.toLowerCase();
   document.querySelectorAll("#table tr").forEach((r,i)=>{
@@ -107,6 +220,7 @@ function filterTable(){
   });
 }
 
+/* ---------- COPY FULL TABLE ---------- */
 function copyImage(){
   const scroll = document.querySelector(".scroll");
   const old = scroll.style.maxHeight;
@@ -120,6 +234,7 @@ function copyImage(){
     });
   });
 }
+
 </script>
 
 </body>
