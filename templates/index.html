@@ -1,24 +1,28 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Agent Performance Upload</title>
+    <title>Upload Agent Performance</title>
     <style>
-        body { font-family: Arial; background: #f4f6f9; }
+        body {
+            font-family: Arial;
+            background: #f4f6f9;
+        }
         .box {
-            width: 400px;
+            width: 420px;
             margin: 120px auto;
-            background: #fff;
-            padding: 25px;
-            border-radius: 10px;
-            box-shadow: 0 0 15px rgba(0,0,0,.1);
+            background: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.15);
             text-align: center;
         }
         button {
-            padding: 10px 20px;
-            background: #007bff;
+            background: #0d6efd;
             color: #fff;
             border: none;
+            padding: 10px 22px;
             border-radius: 6px;
+            font-size: 15px;
             cursor: pointer;
         }
     </style>
@@ -27,7 +31,6 @@
 
 <div class="box">
     <h2>Upload Agent Performance Excel</h2>
-
     <form action="/process" method="post" enctype="multipart/form-data">
         <input type="file" name="file" required><br><br>
         <button type="submit">Upload & Process</button>
