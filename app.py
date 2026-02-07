@@ -3,7 +3,7 @@ import pandas as pd
 
 app = Flask(__name__)
 
-# ---------- helpers ----------
+# ================= HELPERS =================
 def to_sec(t):
     try:
         h, m, s = map(int, str(t).split(":"))
@@ -23,6 +23,7 @@ def to_time(sec):
         return "00:00:00"
 
 
+# ================= ROUTES =================
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -34,7 +35,9 @@ def process():
     agent_files = request.files.getlist("agent_files")
     cdr_files = request.files.getlist("cdr_files")
 
-    # ================= AGENT PERFORMANCE =================
+    # ======================================================
+    # AGENT PERFORMANCE REPORT (AGENT WISE)
+    # ======================================================
     agent_frames = []
 
     for file in agent_files:
@@ -43,36 +46,30 @@ def process():
 
         df = pd.read_excel(file)
         df = df.iloc[2:].reset_index(drop=True)
+
+        # '-' means 0
         df = df.replace("-", 0).infer_objects(copy=False)
 
-        # Column mapping (LETTER BASED)
-        emp_id   = df.iloc[:, 1]          # B
-        name     = df.iloc[:, 2]          # C
-        login    = df.iloc[:, 3].apply(to_sec)   # D
-        talk     = df.iloc[:, 5].apply(to_sec)   # F
-        acw      = df.iloc[:, 7].apply(to_sec)   # H
-        lunch    = df.iloc[:, 19].apply(to_sec)  # T
-        meeting  = df.iloc[:, 20].apply(to_sec)  # U
-        shortb   = df.iloc[:, 22].apply(to_sec)  # W
-        sysdown  = df.iloc[:, 23].apply(to_sec)  # X
-        tea      = df.iloc[:, 24].apply(to_sec)  # Y
-
         temp = pd.DataFrame({
-            "Employee ID": emp_id,
-            "Agent Name": name,
-            "Login": login,
-            "Talk": talk,
-            "ACW": acw,
-            "Lunch": lunch,
-            "Short": shortb,
-            "Tea": tea,
-            "Meeting": meeting + sysdown
+            "Employee ID": df.iloc[:, 1],                 # B
+            "Agent Name": df.iloc[:, 2],                  # C
+            "Login": df.iloc[:, 3].apply(to_sec),         # D
+            "Talk": df.iloc[:, 5].apply(to_sec),          # F
+            "ACW": df.iloc[:, 7].apply(to_sec),           # H
+            "Lunch": df.iloc[:, 19].apply(to_sec),        # T
+            "Meeting": (
+                df.iloc[:, 20].apply(to_sec) +            # U
+                df.iloc[:, 23].apply(to_sec)              # X
+            ),
+            "Short": df.iloc[:, 22].apply(to_sec),        # W
+            "Tea": df.iloc[:, 24].apply(to_sec)           # Y
         })
 
         agent_frames.append(temp)
 
     ap = pd.concat(agent_frames, ignore_index=True)
 
+    # Agent-wise SUM
     ap = ap.groupby("Employee ID", as_index=False).agg({
         "Agent Name": "first",
         "Login": "sum",
@@ -87,7 +84,9 @@ def process():
     ap["Total Break"] = ap["Lunch"] + ap["Short"] + ap["Tea"]
     ap["Net Login"] = ap["Login"] - ap["Total Break"]
 
-    # ================= CDR =================
+    # ======================================================
+    # CDR REPORT (CALL COUNT – TEXT SAFE)
+    # ======================================================
     cdr_frames = []
 
     for file in cdr_files:
@@ -97,43 +96,64 @@ def process():
         cdr = pd.read_excel(file)
         cdr = cdr.replace("-", 0).infer_objects(copy=False)
 
-        emp = cdr.iloc[:, 1]   # B
-        camp = cdr.iloc[:, 6]  # G
-        calls = cdr.iloc[:, 25]  # Z
-
         temp = pd.DataFrame({
-            "Employee ID": emp,
-            "Campaign": camp,
-            "Calls": calls
+            "Employee ID": cdr.iloc[:, 1],    # B
+            "Campaign": cdr.iloc[:, 6],       # G
+            "Call Status": cdr.iloc[:, 25]    # Z
         })
 
         cdr_frames.append(temp)
 
     cdr = pd.concat(cdr_frames, ignore_index=True)
 
-    ib = cdr[cdr["Campaign"] == "CSRIBOUND"].groupby("Employee ID")["Calls"].sum()
-    ob = cdr[cdr["Campaign"] != "CSRIBOUND"].groupby("Employee ID")["Calls"].sum()
+    # Only matured calls
+    cdr = cdr[cdr["Call Status"] == "CALLMATURED"]
+
+    # IB / OB COUNT (ROWS COUNT, NOT SUM)
+    ib = (
+        cdr[cdr["Campaign"] == "CSRIBOUND"]
+        .groupby("Employee ID")
+        .size()
+    )
+
+    ob = (
+        cdr[cdr["Campaign"] != "CSRIBOUND"]
+        .groupby("Employee ID")
+        .size()
+    )
 
     ap["IB Calls"] = ap["Employee ID"].map(ib).fillna(0).astype(int)
     ap["OB Calls"] = ap["Employee ID"].map(ob).fillna(0).astype(int)
     ap["Total Calls"] = ap["IB Calls"] + ap["OB Calls"]
 
+    # ======================================================
+    # AHT CALCULATION
+    # ======================================================
     ap["AHT"] = ap.apply(
-        lambda r: to_time(r["Talk"] / r["Total Calls"]) if r["Total Calls"] > 0 else "00:00:00",
+        lambda r: to_time(r["Talk"] / r["Total Calls"])
+        if r["Total Calls"] > 0 else "00:00:00",
         axis=1
     )
 
-    # Convert time back
-    for c in ["Login", "Net Login", "Talk", "ACW", "Total Break", "Meeting"]:
-        ap[c] = ap[c].apply(to_time)
+    # Convert seconds back to hh:mm:ss
+    for col in ["Login", "Net Login", "Talk", "ACW", "Total Break", "Meeting"]:
+        ap[col] = ap[col].apply(to_time)
 
-    final_cols = [
-        "Employee ID", "Agent Name", "Login", "Net Login",
-        "Talk", "ACW", "Total Break", "Meeting",
-        "IB Calls", "OB Calls", "Total Calls", "AHT"
-    ]
-
-    ap = ap[final_cols]
+    # Final column order
+    ap = ap[[
+        "Employee ID",
+        "Agent Name",
+        "Login",
+        "Net Login",
+        "Talk",
+        "ACW",
+        "Total Break",
+        "Meeting",
+        "IB Calls",
+        "OB Calls",
+        "Total Calls",
+        "AHT"
+    ]]
 
     return render_template(
         "result.html",
