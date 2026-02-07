@@ -1,41 +1,55 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<title>Dashboard</title>
+<title>NGUCC Dashboard</title>
 <style>
-body{font-family:Segoe UI;background:#f6f4fb;margin:0}
-table{
-  width:98%;margin:20px auto;
-  border-collapse:collapse;background:#fff;
-  box-shadow:0 12px 30px rgba(0,0,0,.1)
-}
-th,td{
-  border:1px solid #ddd;padding:8px;
-  text-align:center;font-size:13px
-}
-th{background:#ede9ff;color:#3a3480}
+body { font-family: Arial; background:#f4f6f9 }
+.cards { display:grid; grid-template-columns:repeat(7,1fr); gap:12px }
+.card { background:#fff; padding:15px; border-radius:10px; box-shadow:0 2px 6px #ccc }
+.red { background:#ffcccc; font-weight:bold }
+table { width:100%; border-collapse:collapse; margin-top:20px }
+th,td { border:1px solid #ccc; padding:6px; text-align:center }
+th { background:#222; color:#fff }
 </style>
 </head>
+
 <body>
 
+<!-- TOP SUMMARY -->
+<div class="cards">
+  <div class="card">Total IVR Hit<br><b>{{summary.ivr}}</b></div>
+  <div class="card">Total Mature<br><b>{{summary.mature}}</b></div>
+  <div class="card">IB Mature<br><b>{{summary.ib}}</b></div>
+  <div class="card">OB Mature<br><b>{{summary.ob}}</b></div>
+  <div class="card">Total Talk<br><b>{{summary.talk}}</b></div>
+  <div class="card">AHT<br><b>{{summary.aht}}</b></div>
+  <div class="card">Login<br><b>{{summary.login}}</b></div>
+</div>
+
+<!-- TABLE -->
 <table>
-<thead>
 <tr>
-{% for c in columns %}
-<th>{{ c }}</th>
-{% endfor %}
+<th>Emp ID</th><th>Name</th><th>Login</th><th>Net Login</th>
+<th>Talk</th><th>ACW</th><th>Break</th><th>Meeting</th>
+<th>IB</th><th>OB</th><th>Total</th><th>AHT</th>
 </tr>
-</thead>
-<tbody>
+
 {% for r in data %}
 <tr>
-{% for c in columns %}
-<td>{{ r[c] }}</td>
-{% endfor %}
+<td>{{r["Employee ID"]}}</td>
+<td>{{r["Agent Name"]}}</td>
+<td>{{r["Login"]}}</td>
+<td class="{{'red' if r.Net_Red else ''}}">{{r["Net Login"]}}</td>
+<td>{{r["Talk"]}}</td>
+<td>{{r["ACW"]}}</td>
+<td class="{{'red' if r.Break_Red else ''}}">{{r["Total Break"]}}</td>
+<td class="{{'red' if r.Meeting_Red else ''}}">{{r["Meeting"]}}</td>
+<td>{{r["IB Calls"]}}</td>
+<td>{{r["OB Calls"]}}</td>
+<td>{{r["Total Calls"]}}</td>
+<td>{{r["AHT"]}}</td>
 </tr>
 {% endfor %}
-</tbody>
 </table>
 
 </body>
