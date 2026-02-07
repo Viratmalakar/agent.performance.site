@@ -1,130 +1,146 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>Upload Reports</title>
+from flask import Flask, render_template, request
+import pandas as pd
 
-<style>
-:root{
-  --bg:#f6f4fb;
-  --card:#ffffff;
-  --primary:#7c6ee6;
-  --secondary:#9f8cff;
-  --accent:#5a4fdc;
-  --text:#2f2f3a;
-  --muted:#7a7a99;
-  --border:#e3defa;
-}
+app = Flask(__name__)
 
-*{box-sizing:border-box}
+# ---------- helpers ----------
+def to_sec(t):
+    try:
+        h, m, s = map(int, str(t).split(":"))
+        return h * 3600 + m * 60 + s
+    except:
+        return 0
 
-body{
-  margin:0;
-  min-height:100vh;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  font-family:"Segoe UI",system-ui,sans-serif;
-  background:linear-gradient(135deg,#f6f4fb,#efeafd);
-  color:var(--text);
-}
 
-.wrapper{
-  width:900px;
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:26px;
-}
+def to_time(sec):
+    try:
+        sec = int(sec)
+        h = sec // 3600
+        m = (sec % 3600) // 60
+        s = sec % 60
+        return f"{h:02}:{m:02}:{s:02}"
+    except:
+        return "00:00:00"
 
-.card{
-  background:var(--card);
-  border-radius:22px;
-  padding:30px;
-  box-shadow:0 18px 40px rgba(92,79,220,.15);
-  border:1px solid var(--border);
-}
 
-.card h3{
-  margin:0 0 6px;
-  color:var(--accent);
-}
+@app.route("/")
+def index():
+    return render_template("index.html")
 
-.card p{
-  margin:0 0 18px;
-  font-size:13px;
-  color:var(--muted);
-}
 
-.file-box{
-  border:2px dashed var(--secondary);
-  border-radius:16px;
-  padding:22px;
-  text-align:center;
-  background:#faf9ff;
-}
+@app.route("/process", methods=["POST"])
+def process():
 
-input[type=file]{
-  width:100%;
-  color:var(--muted);
-}
+    agent_files = request.files.getlist("agent_files")
+    cdr_files = request.files.getlist("cdr_files")
 
-button{
-  grid-column:1/3;
-  margin-top:10px;
-  padding:14px;
-  border:none;
-  border-radius:18px;
-  background:linear-gradient(90deg,var(--primary),var(--accent));
-  color:#fff;
-  font-size:16px;
-  font-weight:600;
-  cursor:pointer;
-  box-shadow:0 12px 28px rgba(124,110,230,.35);
-}
+    # ================= AGENT PERFORMANCE =================
+    agent_frames = []
 
-button:hover{
-  transform:translateY(-2px);
-}
+    for file in agent_files:
+        if not file.filename:
+            continue
 
-.footer{
-  grid-column:1/3;
-  text-align:center;
-  font-size:12px;
-  color:var(--muted);
-  margin-top:8px;
-}
-</style>
-</head>
+        df = pd.read_excel(file)
+        df = df.iloc[2:].reset_index(drop=True)
+        df = df.replace("-", 0).infer_objects(copy=False)
 
-<body>
+        # Column mapping (LETTER BASED)
+        emp_id   = df.iloc[:, 1]          # B
+        name     = df.iloc[:, 2]          # C
+        login    = df.iloc[:, 3].apply(to_sec)   # D
+        talk     = df.iloc[:, 5].apply(to_sec)   # F
+        acw      = df.iloc[:, 7].apply(to_sec)   # H
+        lunch    = df.iloc[:, 19].apply(to_sec)  # T
+        meeting  = df.iloc[:, 20].apply(to_sec)  # U
+        shortb   = df.iloc[:, 22].apply(to_sec)  # W
+        sysdown  = df.iloc[:, 23].apply(to_sec)  # X
+        tea      = df.iloc[:, 24].apply(to_sec)  # Y
 
-<form action="/process" method="post" enctype="multipart/form-data">
-  <div class="wrapper">
+        temp = pd.DataFrame({
+            "Employee ID": emp_id,
+            "Agent Name": name,
+            "Login": login,
+            "Talk": talk,
+            "ACW": acw,
+            "Lunch": lunch,
+            "Short": shortb,
+            "Tea": tea,
+            "Meeting": meeting + sysdown
+        })
 
-    <div class="card">
-      <h3>Agent Performance Report</h3>
-      <p>Upload agent performance Excel</p>
-      <div class="file-box">
-        <input type="file" name="agent_files" multiple required>
-      </div>
-    </div>
+        agent_frames.append(temp)
 
-    <div class="card">
-      <h3>CDR Report</h3>
-      <p>Upload call detail record Excel</p>
-      <div class="file-box">
-        <input type="file" name="cdr_files" multiple>
-      </div>
-    </div>
+    ap = pd.concat(agent_frames, ignore_index=True)
 
-    <button type="submit">Upload & Generate Dashboard</button>
+    ap = ap.groupby("Employee ID", as_index=False).agg({
+        "Agent Name": "first",
+        "Login": "sum",
+        "Talk": "sum",
+        "ACW": "sum",
+        "Lunch": "sum",
+        "Short": "sum",
+        "Tea": "sum",
+        "Meeting": "sum"
+    })
 
-    <div class="footer">
-      Secure upload • Agent-wise analytics • Premium purple theme
-    </div>
+    ap["Total Break"] = ap["Lunch"] + ap["Short"] + ap["Tea"]
+    ap["Net Login"] = ap["Login"] - ap["Total Break"]
 
-  </div>
-</form>
+    # ================= CDR =================
+    cdr_frames = []
 
-</body>
-</html>
+    for file in cdr_files:
+        if not file.filename:
+            continue
+
+        cdr = pd.read_excel(file)
+        cdr = cdr.replace("-", 0).infer_objects(copy=False)
+
+        emp = cdr.iloc[:, 1]   # B
+        camp = cdr.iloc[:, 6]  # G
+        calls = cdr.iloc[:, 25]  # Z
+
+        temp = pd.DataFrame({
+            "Employee ID": emp,
+            "Campaign": camp,
+            "Calls": calls
+        })
+
+        cdr_frames.append(temp)
+
+    cdr = pd.concat(cdr_frames, ignore_index=True)
+
+    ib = cdr[cdr["Campaign"] == "CSRIBOUND"].groupby("Employee ID")["Calls"].sum()
+    ob = cdr[cdr["Campaign"] != "CSRIBOUND"].groupby("Employee ID")["Calls"].sum()
+
+    ap["IB Calls"] = ap["Employee ID"].map(ib).fillna(0).astype(int)
+    ap["OB Calls"] = ap["Employee ID"].map(ob).fillna(0).astype(int)
+    ap["Total Calls"] = ap["IB Calls"] + ap["OB Calls"]
+
+    ap["AHT"] = ap.apply(
+        lambda r: to_time(r["Talk"] / r["Total Calls"]) if r["Total Calls"] > 0 else "00:00:00",
+        axis=1
+    )
+
+    # Convert time back
+    for c in ["Login", "Net Login", "Talk", "ACW", "Total Break", "Meeting"]:
+        ap[c] = ap[c].apply(to_time)
+
+    final_cols = [
+        "Employee ID", "Agent Name", "Total Login", "Net Login",
+        "Total Talk Time", "Total ACW", "Total Break", "Total Meeting", "AHT",
+        "IB Calls", "OB Calls", "Total Calls"
+    ]
+
+    ap = ap[final_cols]
+
+    return render_template(
+        "result.html",
+        columns=ap.columns.tolist(),
+        data=ap.to_dict(orient="records")
+    )
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000)
