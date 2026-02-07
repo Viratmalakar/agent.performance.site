@@ -1,95 +1,38 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Agent Performance Dashboard</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<style>
-body{font-family:Segoe UI;background:#f4fff6;margin:0}
-header{background:#1fa463;color:white;padding:15px;text-align:center;font-size:22px}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:15px;padding:20px}
-.card{background:white;padding:15px;border-left:6px solid #1fa463;box-shadow:0 2px 6px rgba(0,0,0,.1)}
-.card h4{margin:0;color:#555}
-.card h2{margin:5px 0;color:#1fa463}
-
-.table-box{padding:20px}
-table{width:100%;border-collapse:collapse}
-th,td{border:1px solid #ddd;padding:8px;text-align:center}
-th{background:#1fa463;color:white}
-
-.buttons{text-align:center;margin:15px}
-button{background:#1fa463;color:white;border:none;padding:10px 18px;border-radius:5px;margin:5px}
-</style>
+    <title>Agent Performance Upload</title>
+    <style>
+        body { font-family: Arial; background: #f4f6f9; }
+        .box {
+            width: 400px;
+            margin: 120px auto;
+            background: #fff;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0,0,0,.1);
+            text-align: center;
+        }
+        button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+    </style>
 </head>
-
 <body>
-<header>Agent Performance Dashboard</header>
 
-<div class="cards" id="cards"></div>
+<div class="box">
+    <h2>Upload Agent Performance Excel</h2>
 
-<div class="table-box">
-<table id="resultTable"></table>
+    <form action="/process" method="post" enctype="multipart/form-data">
+        <input type="file" name="file" required><br><br>
+        <button type="submit">Upload & Process</button>
+    </form>
 </div>
 
-<div class="buttons">
-<button onclick="copyTableImage()">Copy Table</button>
-<button onclick="exportExcel()">Export Excel</button>
-<button onclick="location.reload()">Reset</button>
-</div>
-
-<script>
-let lastTable=[];
-
-fetch("/process",{method:"POST",body:new FormData(document.forms[0])})
-
-function render(data){
-
- let s=data.summary;
-
- let order=[
- "TOTAL IVR HIT","TOTAL MATURE","IB MATURE","OB MATURE",
- "TOTAL TALK TIME","AHT","LOGIN COUNT"
- ];
-
- let cards="";
- order.forEach(k=>{
-   cards+=`<div class="card"><h4>${k}</h4><h2>${s[k]}</h2></div>`;
- });
- document.getElementById("cards").innerHTML=cards;
-
- let table=document.getElementById("resultTable");
- let head="<tr>";
- Object.keys(data.table[0]).forEach(k=>head+="<th>"+k+"</th>");
- head+="</tr>";
- table.innerHTML=head;
-
- data.table.forEach(r=>{
-   let row="<tr>";
-   Object.values(r).forEach(v=>row+="<td>"+v+"</td>");
-   row+="</tr>";
-   table.innerHTML+=row;
- });
-
- lastTable=data.table;
-}
-
-function exportExcel(){
- fetch("/export",{method:"POST",body:JSON.stringify(lastTable)})
- .then(r=>r.blob()).then(b=>{
-  let a=document.createElement("a");
-  a.href=URL.createObjectURL(b);
-  a.download="Agent_Report.xlsx";
-  a.click();
- })
-}
-
-function copyTableImage(){
- html2canvas(document.querySelector(".table-box")).then(c=>{
-  c.toBlob(b=>{
-   navigator.clipboard.write([new ClipboardItem({"image/png":b})]);
-   alert("Table copied as image");
-  })
- })
-}
-</script>
 </body>
 </html>
